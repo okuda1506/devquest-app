@@ -1,0 +1,5 @@
+project_id = "devquest"
+
+[functions.quest]
+# Edge 内で Auth の getUser により JWT を検証する。
+verify_jwt = false
