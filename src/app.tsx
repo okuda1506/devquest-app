@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Bell, BookOpen, Box, Check, Circle, CircleCheck, Clipboard, Code2, FolderKanban, GitBranch, GitPullRequest, Github, LayoutDashboard, LockKeyhole, LogOut, Menu, Moon, Sun, Terminal, X } from 'lucide-react';
-import { Link, NavLink, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { branchCommands, chapters, getTask, tasks, template, type Task } from '../supabase/functions/quest/catalog';
 import { callQuest, finishSignIn, signIn, supabase } from './client';
 import { currentTask, dateLabel, demo, empty, noticeText, statusFor, statusLabels, type Home, type Notice, type Status } from './model';
+import { readPreference, savePreference } from './preferences';
 import './styles.css';
+import { FirstDay, firstAssignment } from './first-day';
 
 type Action = (input: Record<string, unknown>) => Promise<boolean>;
 const templateUrl = 'https://github.com/' + template;
@@ -24,10 +26,14 @@ export function App() {
   const [message, setMessage] = useState('');
   const [toast, setToast] = useState<Notice | null>(null);
   const [menu, setMenu] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('devquest-theme') === 'light' ? 'light' : 'dark');
+  const [theme, setTheme] = useState(() => readPreference('devquest-theme') === 'light' ? 'light' : 'dark');
   const seen = useRef(new Set<number>());
   const activeUser = useRef<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const projectRef = useRef<HTMLElement>(null);
+  const [showFirstDay, setShowFirstDay] = useState(() => readPreference('devquest-first-day') !== 'seen');
+  const touring = showFirstDay && location.pathname === '/' && !loadingAuth;
   const demoMode = !userId;
   const home = demoMode ? demo : data;
   const unread = home.notifications.filter(notice => !notice.read_at).length;
@@ -77,7 +83,7 @@ export function App() {
   }, [userId, action]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem('devquest-theme', theme);
+    savePreference('devquest-theme', theme);
   }, [theme]);
 
   const selected = nav.find(item => item.to === location.pathname);
@@ -87,6 +93,25 @@ export function App() {
   const logout = () => void supabase?.auth.signOut().then(({ error }) => {
     if (error) setError('ログアウトできませんでした。');
   });
+
+  function finishFirstDay(openTicket: boolean) {
+    savePreference('devquest-first-day', 'seen');
+    setShowFirstDay(false);
+    if (openTicket) {
+      if (toast?.kind === 'assigned' && toast.task_id === firstAssignment.id) setToast(null);
+      navigate('/tasks/' + firstAssignment.id, { state: { firstDay: true } });
+    }
+    requestAnimationFrame(() => {
+      document.getElementById('main-content')?.focus({ preventScroll: true });
+      if (openTicket) window.scrollTo({ top: 0, behavior: 'instant' });
+    });
+  }
+
+  function replayFirstDay() {
+    setShowFirstDay(true);
+    setMenu(false);
+    navigate('/');
+  }
 
   return <div className="shell">
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>本文へ移動</a>
@@ -118,17 +143,18 @@ export function App() {
         {error && <p className="feedback error" role="alert">{error} {userId && <button className="text-button" onClick={() => void action({ action: 'home' })}>データを再取得</button>}</p>}
         {message && <p className="feedback success" role="status"><CircleCheck size={17} />{message}</p>}
         <Routes>
-          <Route index element={<Dashboard home={home} task={current} demoMode={demoMode} />} />
+          <Route index element={<Dashboard projectRef={projectRef} home={home} task={current} demoMode={demoMode} />} />
           <Route path="/project" element={<Project home={home} />} />
           <Route path="/tasks/:id" element={<Ticket home={home} demoMode={demoMode} busy={busy} action={action} />} />
           <Route path="/history" element={<History home={home} />} />
           <Route path="/notifications" element={<Notifications home={home} action={action} busy={busy || demoMode} />} />
-          <Route path="/settings" element={<Settings home={home} action={action} busy={busy} demoMode={demoMode} login={login} />} />
+          <Route path="/settings" element={<Settings home={home} action={action} busy={busy} demoMode={demoMode} login={login} replayFirstDay={replayFirstDay} />} />
           <Route path="*" element={<><h1>ページが見つかりません</h1><Link to="/">ダッシュボードへ</Link></>} />
         </Routes>
       </main>
     </div>
-    {toast && <div className={'toast' + (getTask(toast.task_id)?.priority === '緊急' ? ' urgent' : '')} role="status">
+    {touring && <FirstDay projectRef={projectRef} onSkip={() => finishFirstDay(false)} onOpenTicket={() => finishFirstDay(true)} />}
+    {!touring && toast && <div className={'toast' + (getTask(toast.task_id)?.priority === '緊急' ? ' urgent' : '')} role="status">
       <Bell size={18} /><Link to={'/tasks/' + toast.task_id} onClick={() => { setToast(null); void action({ action: 'read', notificationId: toast.id }); }}>
         <strong>{noticeText(toast)}</strong><small>{toast.task_id} · {getTask(toast.task_id)?.title}</small>
       </Link><button className="icon-button" aria-label="通知を閉じる" onClick={() => setToast(null)}><X size={17} /></button>
@@ -143,7 +169,7 @@ function Title({ title, description }: { title: string; description: string }) {
   return <div className="page-title"><h1>{title}</h1><p>{description}</p></div>;
 }
 
-function Dashboard({ home, task, demoMode }: { home: Home; task?: Task; demoMode: boolean }) {
+function Dashboard({ home, task, demoMode, projectRef }: { projectRef: RefObject<HTMLElement | null>; home: Home; task?: Task; demoMode: boolean }) {
   const finished = home.progress.filter(entry => entry.status === 'completed').length;
   const total = tasks.filter(item => item.available).length;
   const percent = Math.round(finished * 100 / total);
@@ -171,7 +197,7 @@ function Dashboard({ home, task, demoMode }: { home: Home; task?: Task; demoMode
           <p><strong>{finished}</strong> / {total} 件の課題を完了</p>
           <Link className="sub-link" to="/history">学習履歴を見る <ArrowUpRight size={14} /></Link></div>
       </section>
-      <section className="panel project-panel">
+      <section className="panel project-panel" ref={projectRef}>
         <div className="panel-heading"><span><span className="panel-icon"><Box size={17} /></span><strong>参加プロジェクト</strong></span></div>
         <div className="panel-body"><div className="project-identity"><span className="project-icon">T</span><div><h2>THREAD</h2><p>アパレル EC システム</p></div></div>
         <div className="labels"><span>React</span><span>TypeScript</span><span>NestJS</span></div>
@@ -230,6 +256,7 @@ function Ticket({ home, demoMode, busy, action }: { home: Home; demoMode: boolea
 
 function TicketContent({ task, home, demoMode, busy, action }: { task: Task; home: Home; demoMode: boolean; busy: boolean; action: Action }) {
   const [hints, setHints] = useState(0);
+  const fromFirstDay = useLocation().state?.firstDay && task.id === firstAssignment.id;
   const status = statusFor(home, task);
   const progress = home.progress.find(record => record.task_id === task.id);
   const next = tasks.find(candidate => candidate.previous === task.id && statusFor(home, candidate) !== 'planned');
@@ -240,6 +267,11 @@ function TicketContent({ task, home, demoMode, busy, action }: { task: Task; hom
     <Link className="sub-link back" to="/project">← プロジェクトの課題一覧</Link>
     <div className="ticket-header"><div className="ticket-meta"><span className="mono">{task.id}</span><Badge status={status} /></div><h1>{task.title}</h1>
       <div className="labels"><span>{task.category}</span><span>{task.level}</span><span className={task.priority === '緊急' ? 'danger' : ''}>優先度 {task.priority}</span>{task.tags.map(tag => <span key={tag}>{tag}</span>)}</div></div>
+    {fromFirstDay && <section className="panel block">
+      <h2>最初の作業</h2>
+      <p>作業ブランチは <code>{task.branch}</code> です。まずは THREAD の商品一覧で、在庫のある商品と在庫切れの商品を見比べてみましょう。</p>
+      {!home.profile.repo_name && <Link className="sub-link" to="/settings">演習の始め方を見る <ArrowRight size={14} /></Link>}
+    </section>}
     <div className="details-grid"><div className="stack">
       <Block title="改修依頼"><div className="requester"><span>{task.requester.initials}</span><p><strong>{task.requester.name}</strong><small>{task.requester.role}</small></p></div>
         <p>{task.description}</p>
@@ -258,7 +290,7 @@ function TicketContent({ task, home, demoMode, busy, action }: { task: Task; hom
           <Copy label="ブランチ名をコピー" value={task.branch} />
           <h3>ブランチ作成手順</h3><pre><code>{commands}</code></pre><Copy label="コマンドをコピー" value={commands} />
           <p className="muted">前の課題をマージした最新の main を使います。未コミットの変更は先にコミットするか退避してください。指定ブランチがある場合は <code>git switch {task.branch}</code> で切り替えます。</p>
-        </> : <p className="muted">{status === 'planned' ? 'この課題は追加予定です。' : '前の課題を完了すると解放されます。'}</p>}
+        </> : <p className="muted">{status === 'planned' ? 'この課題は追加予定です。' : task.previous ? '前の課題を完了すると解放されます。' : '演習リポジトリを登録すると解放されます。'}</p>}
       </Block>
       <Block title="採点結果">
         {home.profile.repo_name && <a className="sub-link" href={'https://github.com/' + home.profile.repo_name} target="_blank" rel="noreferrer"><Github size={15} /> 演習リポジトリ <ArrowUpRight size={14} /></a>}
@@ -307,7 +339,7 @@ function Notifications({ home, action, busy }: { home: Home; action: Action; bus
   </>;
 }
 
-function Settings({ home, action, busy, demoMode, login }: { home: Home; action: Action; busy: boolean; demoMode: boolean; login: () => void }) {
+function Settings({ home, action, busy, demoMode, login, replayFirstDay }: { replayFirstDay: () => void; home: Home; action: Action; busy: boolean; demoMode: boolean; login: () => void }) {
   async function register(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -315,6 +347,9 @@ function Settings({ home, action, busy, demoMode, login }: { home: Home; action:
   }
   return <>
     <Title title="演習リポジトリの設定" description="THREAD の自分専用リポジトリを作成し、DevQuest に登録します。" />
+    <Block title="初出勤チュートリアル">
+      <button className="button" onClick={replayFirstDay}>着任の案内をもう一度見る <ArrowRight size={15} /></button>
+    </Block>
     <Block title="演習を始める">
       <ol><li>GitHub でログインします。</li><li>THREAD のテンプレートから個人所有の公開リポジトリを作成します。既定ブランチは main を使用してください。</li><li>作成したリポジトリを登録し、ローカルで README の手順に沿って起動します。</li></ol>
       <div className="actions"><a className="button" href={templateUrl + '/generate'} target="_blank" rel="noreferrer"><Github size={16} /> テンプレートを使う <ArrowUpRight size={14} /></a>

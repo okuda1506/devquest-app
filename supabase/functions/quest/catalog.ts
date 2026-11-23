@@ -1,6 +1,6 @@
 export const template = 'okuda1506/devquest-fashion-template';
 export const chapters = ['開発チームへの参画', 'バックエンド保守', 'フルスタック改修', '新機能・本番障害対応'];
-const team = {
+export const team = {
   qa: { name: '佐藤 美咲', role: 'QA担当', initials: '佐' },
   pm: { name: '田中 健太', role: 'PM', initials: '田' },
   director: { name: '鈴木 翔', role: 'ディレクター', initials: '鈴' },
