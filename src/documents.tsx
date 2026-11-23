@@ -4,7 +4,7 @@ import './documents.css';
 const documents = [
     {
         title: 'テーブル定義書',
-        description: 'THREAD と DevQuest のカラム、キー、制約、テーブル間の関係を確認できます。',
+        description: 'THREAD のカラム、キー、制約をテーブルごとのシートで確認できます。',
         file: 'table-definition.xlsx',
         icon: Database
     },

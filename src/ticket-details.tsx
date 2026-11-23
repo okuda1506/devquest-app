@@ -8,13 +8,13 @@ export const ticketDetails: Record<string, { note: string; surface: string; refe
     'DEV-101': {
         note: '問い合わせのあったお客様は、在庫を調べるために商品詳細を1件ずつ開いていました。スマートフォンの一覧でも、カードだけで判断できるようにしたいです。',
         surface: 'EC サイト ／ 商品一覧',
-        reference: 'テーブル定義書 → THREAD カラム定義 → Product.stock',
+        reference: 'テーブル定義書 → Product シート → stock',
         reply: '一覧だけで在庫が分かるようになりました。お客様が買える商品を見つけやすくなります。対応ありがとうございます！'
     },
     'DEV-102': {
         note: '商品を比較中のお客様から、安い順にしても比較しづらいという報告が届きました。桁数が異なる価格と、同額の商品が並ぶ場合を見てください。',
         surface: 'EC サイト ／ 商品一覧の並び順',
-        reference: 'テーブル定義書 → THREAD カラム定義 → Product.price',
+        reference: 'テーブル定義書 → Product シート → price',
         reply: '予算に合う商品を順に見比べられるようになりました。同額の商品も位置が変わらないので探しやすいです。'
     },
     'DEV-103': {
