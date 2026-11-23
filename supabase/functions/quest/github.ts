@@ -29,6 +29,7 @@ export type Repo = {
 const shaPattern = /^[0-9a-f]{40}$/;
 const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/;
 export const templateBaselines = [
+  'c39fe6597bf0929fa651596a53f3db636d71a852',
   '8308c7e7f65f64e90f265cb0e40e42157ed1b752',
   '7d4f1f33a70257bf4bf6b28e0947a6180840a81b',
 ] as const;
