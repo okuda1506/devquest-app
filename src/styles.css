@@ -1,17 +1,18 @@
 :root {
   font-family: Inter, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", system-ui, sans-serif;
-  color-scheme: dark;
-  --canvas: #121316; --sidebar: #17181c; --panel: #191b20; --raised: #1f2128;
-  --line: #2a2d36; --text: #edf0f6; --muted: #a0a8b8; --faint: #8b93a4;
-  --accent: #94abff; --blue: #6a86f7; --blue-ink: #10162c; --blue-faint: #242e53;
-  --green: #77d4af; --green-bg: #20372f; --red: #ffa5a7; --red-bg: #442829; --radius: 12px;
-}
-:root[data-theme="light"] {
+  --radius: 12px;
   color-scheme: light;
   --canvas: #f5f6fa; --sidebar: #eef0f6; --panel: #fff; --raised: #f0f2f8;
   --line: #dce1eb; --text: #252a38; --muted: #555e70; --faint: #626d81;
   --accent: #3650b2; --blue: #4260cf; --blue-ink: #fff; --blue-faint: #e8edff;
   --green: #126847; --green-bg: #e1f5ea; --red: #9c3130; --red-bg: #fde8e8;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #121316; --sidebar: #17181c; --panel: #191b20; --raised: #1f2128;
+  --line: #2a2d36; --text: #edf0f6; --muted: #a0a8b8; --faint: #8b93a4;
+  --accent: #94abff; --blue: #6a86f7; --blue-ink: #10162c; --blue-faint: #242e53;
+  --green: #77d4af; --green-bg: #20372f; --red: #ffa5a7; --red-bg: #442829;
 }
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 300px; background: var(--canvas); color: var(--text); font-size: 14px; line-height: 1.6; }

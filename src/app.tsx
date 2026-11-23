@@ -26,7 +26,7 @@ export function App() {
   const [message, setMessage] = useState('');
   const [toast, setToast] = useState<Notice | null>(null);
   const [menu, setMenu] = useState(false);
-  const [theme, setTheme] = useState(() => readPreference('devquest-theme') === 'light' ? 'light' : 'dark');
+  const [theme, setTheme] = useState(() => readPreference('devquest-theme') === 'dark' ? 'dark' : 'light');
   const seen = useRef(new Set<number>());
   const activeUser = useRef<string | null>(null);
   const location = useLocation();
@@ -83,7 +83,7 @@ export function App() {
   }, [userId, action]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    savePreference('devquest-theme', theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#111216' : '#f5f6fa');
   }, [theme]);
 
   const selected = nav.find(item => item.to === location.pathname);
@@ -131,7 +131,11 @@ export function App() {
       <header className="topbar">
         <div className="breadcrumb"><button className="icon-button mobile-menu" aria-label="メニュー" aria-expanded={menu} onClick={() => setMenu(show => !show)}><Menu size={19} /></button><span>ワークスペース</span><span aria-hidden="true">/</span><strong>{crumb}</strong></div>
         <div className="top-actions">
-          <button className="icon-button" aria-label={theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え'} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
+          <button className="icon-button" aria-label={theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え'} onClick={() => {
+            const nextTheme = theme === 'dark' ? 'light' : 'dark';
+            setTheme(nextTheme);
+            savePreference('devquest-theme', nextTheme);
+          }}>{theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}</button>
           <Link className="icon-button notification-link" aria-label={unread ? `通知センター（未読 ${unread} 件）` : '通知センター'} to="/notifications"><Bell size={17} />{unread > 0 && <i />}</Link>
           {userId ? <div className="account"><span>{home.profile.github_login || 'GitHub'}</span><button className="icon-button" aria-label="ログアウト" onClick={logout}><LogOut size={16} /></button></div>
             : <button className="button login" onClick={login} disabled={!supabase || loadingAuth}><Github size={16} />GitHub でログイン</button>}
