@@ -46,6 +46,8 @@ DB テストは既存インスタンスから独立した一時的な PostgreSQL
 
 OAuth の Secret と Supabase の service role キーはブラウザ用変数や Git に保存しません。PKCE コードの交換は Edge Function で実行し、ブラウザには Supabase セッションだけを返します。公開リポジトリの GitHub 情報は公開 API で確認し、GitHub に書き込む認可を学習者に要求しません。API レート制限が問題になる場合のみ、管理者がリポジトリへの読み取りに限定した `QUEST_GITHUB_READ_TOKEN` を Supabase の Edge Function Secrets に設定します。
 
+GitHub でログインしたブラウザでは、同じ URL を開き直してもログインから1時間はセッションを再開できます。Supabase がアクセストークンを更新しても、この期限は延長されません。
+
 ## 採点・運用
 
 - ワークフローは `task/DEV-101` から `task/DEV-104` の push で課題テストを実行します。既存テストに加え、解放済みの過去課題のテストも実行します。採点専用ファイルの変更は GitHub Actions と Edge Function の両方で照合します。

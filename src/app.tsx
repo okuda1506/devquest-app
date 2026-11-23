@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Bell, BookOpen, Box, Check, Circle, CircleCheck, Clipboard, Code2, FolderKanban, GitBranch, GitPullRequest, Github, LayoutDashboard, LockKeyhole, LogOut, Menu, Moon, Sun, Terminal, X } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { branchCommands, chapters, getTask, tasks, template, type Task } from '../supabase/functions/quest/catalog';
-import { callQuest, finishSignIn, signIn, supabase } from './client';
+import { callQuest, finishSignIn, sessionExpiration, signIn, supabase } from './client';
 import { currentTask, dateLabel, demo, empty, noticeText, statusFor, statusLabels, type Home, type Notice, type Status } from './model';
 import { readPreference, savePreference } from './preferences';
 import './styles.css';
@@ -42,18 +42,42 @@ export function App() {
     if (!supabase) return;
     const auth = supabase.auth;
     let active = true;
-    const { data: { subscription } } = auth.onAuthStateChange((_event, session) => {
-      if (!active) return;
-      const id = session?.user.id ?? null;
+    let timer: number | undefined;
+
+    function updateUser(id: string | null) {
       if (id !== activeUser.current) {
         activeUser.current = id;
         setData(empty); setToast(null); setBusy(false); seen.current.clear();
       }
       setUserId(id);
+    }
+
+    function checkExpiry() {
+      window.clearTimeout(timer);
+      if (!activeUser.current) return;
+      const expiresAt = sessionExpiration();
+      if (expiresAt === null) {
+        updateUser(null);
+        setError('ログインの有効期限が切れました。もう一度ログインしてください。');
+      } else {
+        timer = window.setTimeout(checkExpiry, Math.max(1, expiresAt - Date.now()));
+      }
+    }
+
+    const { data: { subscription } } = auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      updateUser(session && sessionExpiration() ? session.user.id : null);
+      checkExpiry();
     });
+    window.addEventListener('focus', checkExpiry);
     void finishSignIn().catch((cause: Error) => { if (active) setError(cause.message); })
       .finally(() => { if (active) setLoadingAuth(false); });
-    return () => { active = false; subscription.unsubscribe(); };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', checkExpiry);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const action = useCallback<Action>(async (input) => {
@@ -90,7 +114,7 @@ export function App() {
   const crumb = selected?.label ?? (location.pathname.startsWith('/tasks/') ? '課題詳細' : 'リポジトリ設定');
   const current = currentTask(home);
   const login = () => void signIn().catch((cause: Error) => setError(cause.message));
-  const logout = () => void supabase?.auth.signOut().then(({ error }) => {
+  const logout = () => void supabase?.auth.signOut({ scope: 'local' }).then(({ error }) => {
     if (error) setError('ログアウトできませんでした。');
   });
 

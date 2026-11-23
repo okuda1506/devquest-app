@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
+import { questSessionStorage } from './quest-session';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const verifierKey = 'devquest-oauth-verifier';
-export const supabase = url && key ? createClient(url, key, { auth: { detectSessionInUrl: false, flowType: 'pkce' } }) : null;
+const storageKey = url ? 'sb-' + new URL(url).hostname.split('.')[0] + '-auth-token' : 'devquest-auth-token';
+const authStorage = questSessionStorage(storageKey);
+export const sessionExpiration = authStorage.expiration;
+export const supabase = url && key ? createClient(url, key, {
+  auth: { detectSessionInUrl: false, flowType: 'pkce', storageKey, storage: authStorage },
+}) : null;
 
 function base64Url(value: Uint8Array) {
   return btoa(String.fromCharCode(...value)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
@@ -32,12 +38,20 @@ export async function finishSignIn() {
   history.replaceState(null, '', location.pathname + location.hash);
   if (!code || !verifier || !supabase) throw new Error('GitHub ログインを完了できませんでした。');
   const tokens = await callQuest<{ access_token: string; refresh_token: string }>({ action: 'exchange', code, verifier });
-  const { error } = await supabase.auth.setSession(tokens);
-  if (error) throw new Error('ログインを完了できませんでした。');
+  authStorage.beginLogin(tokens.access_token);
+  try {
+    const { error } = await supabase.auth.setSession(tokens);
+    if (error || !authStorage.expiration()) throw new Error('ログインを完了できませんでした。');
+  } finally {
+    authStorage.finishLogin();
+  }
 }
 
 export async function callQuest<T>(body: Record<string, unknown>): Promise<T> {
   if (!supabase) throw new Error('Supabase の接続設定がありません。');
+  if (body.action !== 'exchange' && !authStorage.expiration()) {
+    throw new Error('ログインの有効期限が切れました。もう一度ログインしてください。');
+  }
   const { data, error } = await supabase.functions.invoke('quest', { body });
   if (error) {
     const response = error.context;
