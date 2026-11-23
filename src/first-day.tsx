@@ -1,12 +1,20 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { ArrowRight, Bell, BriefcaseBusiness, ChevronRight, ExternalLink, GitBranch, Ticket } from 'lucide-react';
+import {
+    ArrowLeft,
+    ArrowRight,
+    Bell,
+    BriefcaseBusiness,
+    ChevronRight,
+    ExternalLink,
+    GitBranch,
+    Ticket
+} from 'lucide-react';
 import { tasks, team, template } from '../supabase/functions/quest/catalog';
+import { menuTour } from './sidebar-menu';
 import './first-day.css';
 
 export const firstAssignment = tasks[0];
-type Scene = 'arrival' | 'project' | 'setup' | 'request';
-
-const scenes: Record<Scene, { step: number; label: string; title: string; next: string; line: string }> = {
+const scenes = {
     arrival: {
         step: 1,
         label: 'チームに着任',
@@ -18,24 +26,29 @@ const scenes: Record<Scene, { step: number; label: string; title: string; next: 
         step: 2,
         label: '配属先の確認',
         title: 'ここが担当プロジェクトです。',
-        next: '開発環境を準備する',
+        next: 'サイドメニューを見る',
         line: 'THREAD は、すでにお客様が使っているお店です。このカードから、システムの概要やチームの課題をいつでも確認できます。'
     },
-    setup: {
+    menu: {
         step: 3,
+        label: 'サイドメニュー'
+    },
+    setup: {
+        step: 4,
         label: '環境構築',
         title: '開発環境を準備しましょう。',
         next: 'セットアップ完了',
         line: 'THREAD の README に沿って開発環境を起動してください。起動済みの方は、両方の画面を開けることを確認してください。'
     },
     request: {
-        step: 4,
+        step: 5,
         label: '新しい改修依頼',
         title: firstAssignment.title,
         next: '依頼を開く',
         line: firstAssignment.description
     }
 };
+type Scene = keyof typeof scenes;
 const sceneCount = Object.keys(scenes).length;
 const setupReadme = 'https://github.com/' + template + '#初回セットアップ';
 const setupChecks = [
@@ -94,11 +107,22 @@ type FirstDayProps = {
 
 export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
     const [scene, setScene] = useState<Scene>('arrival');
+    const [menuIndex, setMenuIndex] = useState(0);
     const [openedPages, setOpenedPages] = useState<string[]>([]);
     const [instantDialogue, setInstantDialogue] = useState(false);
     const dialogRef = useRef<HTMLDialogElement>(null);
     const titleRef = useRef<HTMLHeadingElement>(null);
-    const { step, label, title, next, line } = scenes[scene];
+    const { step, label } = scenes[scene];
+    const menuItem = scene === 'menu' ? menuTour[menuIndex] : undefined;
+    const lastMenuItem = menuIndex === menuTour.length - 1;
+    const { title, next, line } =
+        scene === 'menu'
+            ? {
+                  title: menuTour[menuIndex].label,
+                  next: lastMenuItem ? '開発環境を準備する' : '次の項目へ',
+                  line: menuTour[menuIndex].line
+              }
+            : scenes[scene];
     const speaker = scene === 'request' ? firstAssignment.requester : team.pm;
 
     useLayoutEffect(() => {
@@ -108,6 +132,7 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
     }, []);
 
     useLayoutEffect(() => {
+        dialogRef.current?.scrollTo(0, 0);
         titleRef.current?.focus({ preventScroll: true });
         if (scene !== 'project' || !projectRef.current) return;
         const project = projectRef.current;
@@ -126,12 +151,45 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
             window.removeEventListener('resize', revealProject);
             window.scrollTo({ top: originalScroll, behavior: 'instant' });
         };
-    }, [scene, projectRef]);
+    }, [scene, menuIndex, projectRef]);
+
+    useLayoutEffect(() => {
+        if (!menuItem) return;
+        const target = document.getElementById(menuItem.id);
+        const sidebar = target?.closest('aside');
+        const dialog = dialogRef.current;
+        if (!target || !sidebar || !dialog) return;
+
+        target.classList.add('menu-tour-current');
+        const positionGuide = () => {
+            const bounds = sidebar.getBoundingClientRect();
+            const item = target.getBoundingClientRect();
+            // スクロールはメニュー内に留めて背後のダッシュボードの位置を保つ
+            sidebar.scrollTop += Math.min(0, item.top - bounds.top - 8) + Math.max(0, item.bottom - bounds.bottom + 8);
+            const top = Math.min(
+                target.getBoundingClientRect().top - 56,
+                window.innerHeight - dialog.offsetHeight - 12
+            );
+            dialog.style.setProperty('--menu-top', Math.max(12, top) + 'px');
+            dialog.style.setProperty('--menu-left', bounds.right + 16 + 'px');
+        };
+        positionGuide();
+        const observer = new ResizeObserver(positionGuide);
+        observer.observe(sidebar);
+        observer.observe(dialog);
+        return () => {
+            observer.disconnect();
+            target.classList.remove('menu-tour-current');
+        };
+    }, [menuItem]);
 
     function advance() {
         if (scene === 'arrival') setScene('project');
-        else if (scene === 'project') setScene('setup');
-        else if (scene === 'setup') setScene('request');
+        else if (scene === 'project') setScene('menu');
+        else if (scene === 'menu') {
+            if (lastMenuItem) setScene('setup');
+            else setMenuIndex((index) => index + 1);
+        } else if (scene === 'setup') setScene('request');
         else onOpenTicket();
     }
 
@@ -153,17 +211,22 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                     <ChevronRight size={13} />
                     <strong>{label}</strong>
                 </div>
-                <button className="scene-skip" onClick={onSkip}>
-                    スキップ
+                <button className="scene-skip" onClick={menuItem ? () => setScene('setup') : onSkip}>
+                    {menuItem ? 'メニュー案内を省略' : 'スキップ'}
                 </button>
             </div>
-            <div className="scene-body" key={scene}>
+            <div className="scene-body" key={menuItem?.id ?? scene}>
                 {scene === 'arrival' && <StaffPass />}
                 <div className="scene-dialogue">
                     <div className="speaker">
                         <span className="speaker-avatar">{speaker.initials}</span>
                         <strong>{speaker.name}</strong>
                         <small>{speaker.role}</small>
+                        {menuItem && (
+                            <span className="menu-tour-count">
+                                {menuIndex + 1} / {menuTour.length}
+                            </span>
+                        )}
                     </div>
                     {scene === 'request' && (
                         <span className="scene-ticket mono">
@@ -224,13 +287,23 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                         全文表示
                     </label>
                 </div>
-                <button
-                    className="button primary"
-                    onClick={advance}
-                    disabled={scene === 'setup' && openedPages.length !== setupChecks.length}
-                >
-                    {next} <ArrowRight size={16} />
-                </button>
+                <div className="scene-navigation">
+                    {menuItem && (
+                        <button
+                            className="button"
+                            onClick={() => (menuIndex === 0 ? setScene('project') : setMenuIndex(menuIndex - 1))}
+                        >
+                            <ArrowLeft size={16} /> 戻る
+                        </button>
+                    )}
+                    <button
+                        className="button primary"
+                        onClick={advance}
+                        disabled={scene === 'setup' && openedPages.length !== setupChecks.length}
+                    >
+                        {next} <ArrowRight size={16} />
+                    </button>
+                </div>
             </div>
         </dialog>
     );

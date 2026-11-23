@@ -4,7 +4,6 @@ import {
     ArrowRight,
     ArrowUpRight,
     Bell,
-    BookOpen,
     Box,
     Check,
     Circle,
@@ -12,11 +11,9 @@ import {
     Clipboard,
     Code2,
     FileText,
-    FolderKanban,
     GitBranch,
     GitPullRequest,
     Github,
-    LayoutDashboard,
     LockKeyhole,
     LockKeyholeOpen,
     LogOut,
@@ -44,6 +41,7 @@ import {
 import { readPreference, savePreference } from './preferences';
 import './styles.css';
 import { FirstDay, firstAssignment } from './first-day';
+import { settingsLink, threadLink, workspaceLinks } from './sidebar-menu';
 import { Documents } from './documents';
 import { CriterionResults, ticketDetails } from './ticket-details';
 
@@ -55,13 +53,6 @@ function unlockedChapterFor(notice: Notice) {
 
 type Action = (input: Record<string, unknown>) => Promise<boolean>;
 const templateUrl = 'https://github.com/' + template;
-const nav = [
-    { to: '/', label: 'ダッシュボード', icon: LayoutDashboard },
-    { to: '/project', label: 'プロジェクト', icon: FolderKanban },
-    { to: '/documents', label: 'ドキュメント', icon: FileText },
-    { to: '/history', label: '学習履歴', icon: BookOpen },
-    { to: '/notifications', label: '通知センター', icon: Bell }
-];
 
 export function App() {
     const [userId, setUserId] = useState<string | null>(null);
@@ -197,7 +188,7 @@ export function App() {
             ?.setAttribute('content', theme === 'dark' ? '#111216' : '#f5f6fa');
     }, [theme]);
 
-    const selected = nav.find((item) => item.to === location.pathname);
+    const selected = workspaceLinks.find((item) => item.to === location.pathname);
     const crumb = selected?.label ?? (location.pathname.startsWith('/tasks/') ? '課題詳細' : 'リポジトリ設定');
     const current = currentTask(home);
     const unlockedChapter = toast ? unlockedChapterFor(toast) : undefined;
@@ -253,8 +244,8 @@ export function App() {
                 <div className="sidebar-body">
                     <span className="nav-label">ワークスペース</span>
                     <nav aria-label="メインメニュー">
-                        {nav.map(({ to, label, icon: Icon }) => (
-                            <NavLink key={to} to={to} end={to === '/'} onClick={() => setMenu(false)}>
+                        {workspaceLinks.map(({ id, to, label, icon: Icon }) => (
+                            <NavLink key={id} id={id} to={to} end={to === '/'} onClick={() => setMenu(false)}>
                                 <Icon size={17} />
                                 {label}
                                 {to === '/notifications' && unread > 0 && <span className="count">{unread}</span>}
@@ -262,18 +253,18 @@ export function App() {
                         ))}
                     </nav>
                     <span className="nav-label project-label">参加プロジェクト</span>
-                    <Link className="mini-project" to="/project" onClick={() => setMenu(false)}>
+                    <Link id={threadLink.id} className="mini-project" to={threadLink.to} onClick={() => setMenu(false)}>
                         <span className="project-icon">T</span>
                         <span>
-                            <strong>THREAD</strong>
+                            <strong>{threadLink.label}</strong>
                             <small>アパレル EC</small>
                         </span>
                         <ArrowUpRight size={14} />
                     </Link>
                 </div>
                 <div className="side-bottom">
-                    <Link to="/settings" onClick={() => setMenu(false)}>
-                        <GitBranch size={16} /> リポジトリ設定
+                    <Link id={settingsLink.id} to={settingsLink.to} onClick={() => setMenu(false)}>
+                        <GitBranch size={16} /> {settingsLink.label}
                     </Link>
                 </div>
             </aside>
