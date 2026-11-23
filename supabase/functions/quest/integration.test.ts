@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import { getTask, tasks, template, branchCommands } from './catalog';
-import { GithubError, inspectGrade, repoName, verifyRepo, type Github, type Repo } from './github';
+import { GithubError, inspectGrade, repoName, verifyProtection, verifyRepo, type Github, type Repo } from './github';
 import { exchangeOAuth } from './oauth';
 
-const canonical = 'a'.repeat(40);
+const canonical = ['a'.repeat(40)];
 const main = 'b'.repeat(40);
 const sha = 'c'.repeat(40);
 const merge = 'd'.repeat(40);
@@ -73,6 +73,24 @@ describe('演習の判定', () => {
     await expect(inspectGrade(github(), canonical, repo, getTask('DEV-102')!, null)).rejects.toThrow(/解放/);
     await expect(inspectGrade(github({ relation: 'diverged' }), canonical, repo, task, null)).rejects.toThrow(/最新の main/);
   });
+});
+
+test('分離前と分離後の採点基準を認め、異なる版を混ぜた提出を拒否する', async () => {
+  const legacy = { ...workflow, sha: '8'.repeat(40) };
+  const adminConfig = { ...workflow, path: 'admin/vite.config.ts', sha: '9'.repeat(40) };
+  const fixture = (candidate: Array<typeof workflow>): Github => async <T>(path: string) => {
+    const source = path.includes(template);
+    const tree = path.includes(canonical[0]) ? [workflow, adminConfig] : [legacy];
+    return (path.includes('/git/commits/')
+      ? { tree: { sha: path.split('/').at(-1) } }
+      : { truncated: false, tree: source ? tree : candidate }) as T;
+  };
+  const baselines = [...canonical, 'f'.repeat(40)];
+  await expect(verifyProtection(fixture([workflow, adminConfig]), baselines, repo.full_name, sha)).resolves.toBeUndefined();
+  await expect(verifyProtection(fixture([legacy]), baselines, repo.full_name, sha)).resolves.toBeUndefined();
+  const changedConfig = { ...adminConfig, sha: changed };
+  await expect(verifyProtection(fixture([workflow, changedConfig]), baselines, repo.full_name, sha)).rejects.toThrow(/保護ファイル/);
+  await expect(verifyProtection(fixture([legacy, adminConfig]), baselines, repo.full_name, sha)).rejects.toThrow(/保護ファイル/);
 });
 
 test('OAuth 交換では GitHub トークンをブラウザに返さない', async () => {

@@ -2,7 +2,7 @@ import { authenticate } from './auth.ts';
 import { exchangeOAuth } from './oauth.ts';
 import { QuestError } from './auth-errors.ts';
 import { getTask, tasks } from './catalog.ts';
-import { githubClient, inspectGrade, readHead, repoName, verifyProtection, verifyRepo, type Repo } from './github.ts';
+import { githubClient, inspectGrade, readHead, repoName, templateBaselines, verifyProtection, verifyRepo, type Repo } from './github.ts';
 
 const env = (name: string) => Deno.env.get(name);
 const cors = {
@@ -34,7 +34,8 @@ Deno.serve(async (request) => {
     if (learner.data?.github_id !== githubId) throw new QuestError('登録時と同じ GitHub アカウントでログインしてください。', 403);
 
     const github = githubClient(env('QUEST_GITHUB_READ_TOKEN'));
-    const canonical = env('THREAD_TEMPLATE_SHA') ?? '';
+    const additionalBaselines = (env('THREAD_TEMPLATE_SHA') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const canonical = [...templateBaselines, ...additionalBaselines];
     let gradeMessage: string | undefined;
 
     if (input.action === 'register') {

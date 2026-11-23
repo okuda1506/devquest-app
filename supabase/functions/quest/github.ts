@@ -28,10 +28,16 @@ export type Repo = {
 };
 const shaPattern = /^[0-9a-f]{40}$/;
 const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/;
+export const templateBaselines = [
+  '8308c7e7f65f64e90f265cb0e40e42157ed1b752',
+  '7d4f1f33a70257bf4bf6b28e0947a6180840a81b',
+] as const;
+
 const protectedFiles = new Set([
-  'package.json', 'package-lock.json', 'eslint.config.js', '.npmrc', 'api/.npmrc', 'web/.npmrc',
+  'package.json', 'package-lock.json', 'eslint.config.js', '.npmrc', 'api/.npmrc', 'web/.npmrc', 'admin/.npmrc', 'packages/shared/.npmrc',
   'api/package.json', 'api/prisma.config.ts', 'api/prisma/seed.ts', 'api/jest.config.cjs', 'api/tsconfig.json', 'api/tsconfig.build.json',
   'web/package.json', 'web/vite.config.ts', 'web/tsconfig.json', 'web/src/test-setup.ts',
+  'admin/package.json', 'admin/vite.config.ts', 'admin/tsconfig.json', 'packages/shared/package.json',
 ]);
 const workflow = '.github/workflows/grade.yml';
 
@@ -71,11 +77,19 @@ async function fingerprint(github: Github, repo: string, commit: string) {
     .map(({ path, mode, sha }) => [path, mode, sha]));
 }
 
-export async function verifyProtection(github: Github, canonical: string, repo: string, sha: string) {
-  if (!shaPattern.test(canonical)) throw new QuestError('採点元の設定がありません。', 503);
+export async function verifyProtection(github: Github, canonical: readonly string[], repo: string, sha: string) {
+  if (!canonical.length || !canonical.every(commit => shaPattern.test(commit))) {
+    throw new QuestError('採点元の設定が正しくありません。', 503);
+  }
   if (!shaPattern.test(sha)) throw new QuestError('コミットを確認できません。');
-  const [source, candidate] = await Promise.all([fingerprint(github, template, canonical), fingerprint(github, repo, sha)]);
-  if (!source.includes(JSON.stringify(workflow)) || source !== candidate) throw new QuestError('採点対象外の保護ファイルに変更があります。元の状態に戻してください。');
+  const candidate = await fingerprint(github, repo, sha);
+  if (candidate.includes(JSON.stringify(workflow))) {
+    // 保護ファイル一式が同じ版と完全に一致する場合だけ、既存・移行後の提出を受け入れる。
+    for (const commit of new Set(canonical)) {
+      if (candidate === await fingerprint(github, template, commit)) return;
+    }
+  }
+  throw new QuestError('採点対象外の保護ファイルに変更があります。元の状態に戻してください。');
 }
 
 export async function readHead(github: Github, repo: string, branch: string): Promise<string | null> {
@@ -109,7 +123,7 @@ async function ancestor(github: Github, repo: string, base: string, head: string
   return compare.status === 'ahead' || compare.status === 'identical';
 }
 
-export async function inspectGrade(github: Github, canonical: string, repo: Repo, task: Task, previousMerge: string | null): Promise<Grade> {
+export async function inspectGrade(github: Github, canonical: readonly string[], repo: Repo, task: Task, previousMerge: string | null): Promise<Grade> {
   if (!task.available || (task.previous && !previousMerge)) throw new QuestError('この課題はまだ解放されていません。', 403);
   const root = repoPath(repo.full_name);
   const params = new URLSearchParams({ state: 'closed', base: 'main', head: repo.owner.login + ':' + task.branch, per_page: '30' });

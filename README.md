@@ -38,7 +38,6 @@ DB テストは既存インスタンスから独立した一時的な PostgreSQL
    supabase login
    supabase link --project-ref <project-ref>
    supabase db push
-   supabase secrets set THREAD_TEMPLATE_SHA=<公開済みテンプレートの40桁コミットSHA>
    supabase functions deploy quest
    ```
 
@@ -52,5 +51,6 @@ OAuth の Secret と Supabase の service role キーはブラウザ用変数や
 - ワークフローは `task/DEV-101` から `task/DEV-104` の push で課題テストを実行します。既存テストに加え、解放済みの過去課題のテストも実行します。採点専用ファイルの変更は GitHub Actions と Edge Function の両方で照合します。
 - Edge Function はログイン中の GitHub ユーザー ID、リポジトリ ID、指定作業ブランチの先端 SHA、採点ワークフローの SHA と結論を照合します。合格と PR マージを分け、main に到達したマージを確認して次を解放します。ブラウザから進捗・採点・通知を書き換える権限は付与しません。
 - 学習者のリポジトリは公開されるため、業務コード、実際の顧客データ、秘密情報を置かないでください。採点は研修用途の公開テストで、機密の試験問題や完全な不正防止が必要な場合は、採点を独立したサービスに移してください。
-- 採点保護対象を更新するときは、Actions が参照するテンプレートの main と Edge Function が参照する固定 SHA の両方を計画的に更新します。既存の学習者リポジトリには、履歴を保持したまま保護対象を更新する手順を案内してください。課題追加時はカタログ・DB の解放順・ワークフロー・回帰テストを揃えます。
+- Edge Function は THREAD の分離前と `thread-split-v1` の保護ファイル一式を認識します。分離前の提出結果も照合できます。古いテンプレートからの新規提出には移行差分の適用が必要です。[履歴を保持する移行手順](https://github.com/okuda1506/devquest-fashion-template#分離前から演習を進めている場合)
+- 採点基準を更新するときは、Actions の基準タグと Edge Function の承認済みコミットを計画的に更新します。追加の基準は Edge Function の `THREAD_TEMPLATE_SHA` に公開済みの40桁コミット SHA をコンマ区切りで指定できます。課題追加時はカタログ・DB の解放順・ワークフロー・回帰テストを揃えます。
 - Supabase の無料プロジェクトが一時停止した場合は、管理画面で再開して Edge Function と DB の疎通を確認します。個人データを含むため、バックアップはアクセスを制限した場所に保管し、復元後にリポジトリ ID、完了 SHA、通知件数を確認します。採点の再確認は同じ提出・通知を重複登録しません。
