@@ -12,6 +12,10 @@ THREAD の開発チームに途中参画し、改修依頼を受け取って自�
 
 ローカルのプレビュー表示で DEV-101 を開いた画面です。
 
+## システムアーキテクチャ
+
+![DevQuest の認証・採点と THREAD の EC サイト・店舗管理・API・DB の構成図](docs/system-architecture.png)
+
 ## ローカル起動
 
 Node.js 22.12 以上または 24 と npm を使います。
