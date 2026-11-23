@@ -30,7 +30,7 @@ const shaPattern = /^[0-9a-f]{40}$/;
 const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/;
 const protectedFiles = new Set([
   'package.json', 'package-lock.json', 'eslint.config.js', '.npmrc', 'api/.npmrc', 'web/.npmrc',
-  'api/package.json', 'api/jest.config.cjs', 'api/tsconfig.json', 'api/tsconfig.build.json',
+  'api/package.json', 'api/prisma.config.ts', 'api/prisma/seed.ts', 'api/jest.config.cjs', 'api/tsconfig.json', 'api/tsconfig.build.json',
   'web/package.json', 'web/vite.config.ts', 'web/tsconfig.json', 'web/src/test-setup.ts',
 ]);
 const workflow = '.github/workflows/grade.yml';

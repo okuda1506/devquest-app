@@ -149,3 +149,7 @@ input { border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px; ba
   .history-row { grid-template-columns: 1fr; }
   .actions { flex-wrap: wrap; }
 }
+.feedback.success { animation: appear .22s ease-out; }
+.up-next { margin-top: 13px; font-size: 12px; }
+.up-next a { color: var(--muted); text-decoration: none; }
+.up-next a:hover { color: var(--accent); }

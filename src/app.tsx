@@ -26,6 +26,7 @@ export function App() {
   const [menu, setMenu] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('devquest-theme') === 'light' ? 'light' : 'dark');
   const seen = useRef(new Set<number>());
+  const activeUser = useRef<string | null>(null);
   const location = useLocation();
   const demoMode = !userId;
   const home = demoMode ? demo : data;
@@ -36,7 +37,13 @@ export function App() {
     const auth = supabase.auth;
     let active = true;
     const { data: { subscription } } = auth.onAuthStateChange((_event, session) => {
-      if (active) setUserId(session?.user.id ?? null);
+      if (!active) return;
+      const id = session?.user.id ?? null;
+      if (id !== activeUser.current) {
+        activeUser.current = id;
+        setData(empty); setToast(null); setBusy(false); seen.current.clear();
+      }
+      setUserId(id);
     });
     void finishSignIn().catch((cause: Error) => { if (active) setError(cause.message); })
       .finally(() => { if (active) setLoadingAuth(false); });
@@ -44,9 +51,11 @@ export function App() {
   }, []);
 
   const action = useCallback<Action>(async (input) => {
+    const requester = activeUser.current;
     setBusy(true); setError(''); setMessage('');
     try {
       const next = await callQuest<Home>(input);
+      if (requester !== activeUser.current) return false;
       setData(next);
       if (next.gradeMessage) setMessage(next.gradeMessage);
       const notification = next.notifications.find(notice =>
@@ -57,9 +66,9 @@ export function App() {
       }
       return true;
     } catch (cause) {
-      setError((cause as Error).message);
+      if (requester === activeUser.current) setError((cause as Error).message);
       return false;
-    } finally { setBusy(false); }
+    } finally { if (requester === activeUser.current) setBusy(false); }
   }, []);
 
   useEffect(() => {
@@ -138,6 +147,7 @@ function Dashboard({ home, task, demoMode }: { home: Home; task?: Task; demoMode
   const finished = home.progress.filter(entry => entry.status === 'completed').length;
   const total = tasks.filter(item => item.available).length;
   const percent = Math.round(finished * 100 / total);
+  const next = task && tasks.find(candidate => candidate.available && candidate.previous === task.id);
   return <>
     <Title title="ダッシュボード" description="参加中のプロジェクトと、あなたの改修依頼を確認できます。" />
     <div className="dashboard-grid">
@@ -148,6 +158,7 @@ function Dashboard({ home, task, demoMode }: { home: Home; task?: Task; demoMode
           <h2>{task.title}</h2><p>{task.description}</p>
           <div className="labels">{task.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
           <div className="panel-foot"><small>依頼者 {task.requester.name}</small><Link className="button primary" to={'/tasks/' + task.id}>課題を開く <ArrowRight size={16} /></Link></div>
+          {next && <p className="up-next"><Link to={'/tasks/' + next.id}>次の課題 {next.id} · {next.title}</Link></p>}
         </div> : <div className="panel-body">
           <p>{finished === total ? '公開中の課題をすべて完了しました。' : '演習リポジトリを登録すると、最初の改修依頼が届きます。'}</p>
           <Link className="button primary" to={finished === total ? '/history' : '/settings'}>{finished === total ? '学習履歴を見る' : 'リポジトリを登録'} <ArrowRight size={16} /></Link>
@@ -240,7 +251,7 @@ function TicketContent({ task, home, demoMode, busy, action }: { task: Task; hom
         {!!hints && <ol>{task.hints.slice(0, hints).map(hint => <li key={hint}>{hint}</li>)}</ol>}
         {hints < task.hints.length && <button className="button" onClick={() => setHints(n => n + 1)}>ヒント {hints + 1} を表示</button>}
       </Block>}
-      {status === 'completed' && <Block title="解説・振り返り"><p>{task.reflection}</p>{next && <Link className="button primary" to={'/tasks/' + next.id}>次の依頼 {next.id} <ArrowRight size={15} /></Link>}</Block>}
+      {(status === 'passed' || status === 'completed') && <Block title="解説・振り返り"><p>{task.reflection}</p>{status === 'completed' && next && <Link className="button primary" to={'/tasks/' + next.id}>次の依頼 {next.id} <ArrowRight size={15} /></Link>}</Block>}
     </div><div className="stack">
       <Block title="作業ブランチ"><div className="branch-name"><GitBranch size={16} /><code>{task.branch}</code></div>
         {ready ? <>
