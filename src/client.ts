@@ -7,59 +7,73 @@ const verifierKey = 'devquest-oauth-verifier';
 const storageKey = url ? 'sb-' + new URL(url).hostname.split('.')[0] + '-auth-token' : 'devquest-auth-token';
 const authStorage = questSessionStorage(storageKey);
 export const sessionExpiration = authStorage.expiration;
-export const supabase = url && key ? createClient(url, key, {
-  auth: { detectSessionInUrl: false, flowType: 'pkce', storageKey, storage: authStorage },
-}) : null;
+export const supabase =
+    url && key
+        ? createClient(url, key, {
+              auth: { detectSessionInUrl: false, flowType: 'pkce', storageKey, storage: authStorage }
+          })
+        : null;
 
 function base64Url(value: Uint8Array) {
-  return btoa(String.fromCharCode(...value)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+    return btoa(String.fromCharCode(...value))
+        .replaceAll('+', '-')
+        .replaceAll('/', '_')
+        .replace(/=+$/, '');
 }
 
 export async function signIn() {
-  if (!supabase) throw new Error('Supabase の接続設定がありません。');
-  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
-  sessionStorage.setItem(verifierKey, verifier);
-  const authorize = new URL(url + '/auth/v1/authorize');
-  authorize.search = new URLSearchParams({
-    provider: 'github', scopes: 'read:user',
-    redirect_to: window.location.origin + window.location.pathname,
-    code_challenge: challenge, code_challenge_method: 's256',
-  }).toString();
-  window.location.assign(authorize);
+    if (!supabase) throw new Error('Supabase の接続設定がありません。');
+    const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+    const challenge = base64Url(
+        new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
+    );
+    sessionStorage.setItem(verifierKey, verifier);
+    const authorize = new URL(url + '/auth/v1/authorize');
+    authorize.search = new URLSearchParams({
+        provider: 'github',
+        scopes: 'read:user',
+        redirect_to: window.location.origin + window.location.pathname,
+        code_challenge: challenge,
+        code_challenge_method: 's256'
+    }).toString();
+    window.location.assign(authorize);
 }
 
 export async function finishSignIn() {
-  const params = new URLSearchParams(location.search);
-  const code = params.get('code');
-  if (!code && !params.has('error')) return;
-  const verifier = sessionStorage.getItem(verifierKey);
-  sessionStorage.removeItem(verifierKey);
-  history.replaceState(null, '', location.pathname + location.hash);
-  if (!code || !verifier || !supabase) throw new Error('GitHub ログインを完了できませんでした。');
-  const tokens = await callQuest<{ access_token: string; refresh_token: string }>({ action: 'exchange', code, verifier });
-  authStorage.beginLogin(tokens.access_token);
-  try {
-    const { error } = await supabase.auth.setSession(tokens);
-    if (error || !authStorage.expiration()) throw new Error('ログインを完了できませんでした。');
-  } finally {
-    authStorage.finishLogin();
-  }
+    const params = new URLSearchParams(location.search);
+    const code = params.get('code');
+    if (!code && !params.has('error')) return;
+    const verifier = sessionStorage.getItem(verifierKey);
+    sessionStorage.removeItem(verifierKey);
+    history.replaceState(null, '', location.pathname + location.hash);
+    if (!code || !verifier || !supabase) throw new Error('GitHub ログインを完了できませんでした。');
+    const tokens = await callQuest<{ access_token: string; refresh_token: string }>({
+        action: 'exchange',
+        code,
+        verifier
+    });
+    authStorage.beginLogin(tokens.access_token);
+    try {
+        const { error } = await supabase.auth.setSession(tokens);
+        if (error || !authStorage.expiration()) throw new Error('ログインを完了できませんでした。');
+    } finally {
+        authStorage.finishLogin();
+    }
 }
 
 export async function callQuest<T>(body: Record<string, unknown>): Promise<T> {
-  if (!supabase) throw new Error('Supabase の接続設定がありません。');
-  if (body.action !== 'exchange' && !authStorage.expiration()) {
-    throw new Error('ログインの有効期限が切れました。もう一度ログインしてください。');
-  }
-  const { data, error } = await supabase.functions.invoke('quest', { body });
-  if (error) {
-    const response = error.context;
-    if (response instanceof Response) {
-      const details = await response.json().catch(() => null);
-      if (typeof details?.error === 'string') throw new Error(details.error);
+    if (!supabase) throw new Error('Supabase の接続設定がありません。');
+    if (body.action !== 'exchange' && !authStorage.expiration()) {
+        throw new Error('ログインの有効期限が切れました。もう一度ログインしてください。');
     }
-    throw new Error('サーバーに接続できませんでした。少し待ってからお試しください。');
-  }
-  return data as T;
+    const { data, error } = await supabase.functions.invoke('quest', { body });
+    if (error) {
+        const response = error.context;
+        if (response instanceof Response) {
+            const details = await response.json().catch(() => null);
+            if (typeof details?.error === 'string') throw new Error(details.error);
+        }
+        throw new Error('サーバーに接続できませんでした。少し待ってからお試しください。');
+    }
+    return data as T;
 }
