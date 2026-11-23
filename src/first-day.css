@@ -68,7 +68,9 @@ body:has(.first-day[open]) {
     overflow: hidden;
     padding: 24px 12px;
     background-color: #16253b;
-    background-image: repeating-linear-gradient(124deg, transparent 0 7px, #e1eaff09 7px 8px);
+    background-image:
+        radial-gradient(ellipse at 40% 28%, #384c73aa, transparent 75%),
+        repeating-linear-gradient(124deg, transparent 0 7px, #e1eaff09 7px 8px);
 }
 .staff-pass {
     display: grid;
@@ -85,6 +87,7 @@ body:has(.first-day[open]) {
     border: 1px solid #f3f6ff;
     border-radius: 10px;
     box-shadow: 5px 8px 0 #0714244d;
+    overflow: hidden;
 }
 .pass-slot {
     justify-self: center;
@@ -187,6 +190,34 @@ body:has(.first-day[open]) {
 }
 .scene-controls {
     border-top: 1px solid var(--line);
+    flex-wrap: wrap;
+}
+.scene-reading-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+}
+.scene-instant {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    min-height: 32px;
+}
+.scene-instant input {
+    margin: 0;
+    accent-color: var(--accent);
+}
+.dialogue-transcript {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }
 .scene-progress {
     gap: 4px;
@@ -232,6 +263,13 @@ body:has(.first-day[open]) {
     color: var(--accent);
     font-size: 12px;
     font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    margin-bottom: 6px;
+    background: var(--blue-faint);
+    border-inline-start: 2px solid currentColor;
 }
 .scene-request .scene-body {
     animation: first-day-request 0.24s ease-out;
@@ -240,6 +278,94 @@ body:has(.first-day[open]) {
     from {
         opacity: 0;
         transform: translateY(-8px);
+    }
+}
+@media (prefers-reduced-motion: no-preference) {
+    /* 全文字の幅を最初から確保して文字送り中の改行と操作ボタンの移動を防ぐ */
+    .dialogue-letter {
+        animation: dialogue-type var(--hold) linear var(--start) both;
+    }
+    @keyframes dialogue-type {
+        0% {
+            opacity: 0;
+        }
+        1%,
+        99% {
+            opacity: 1;
+            box-shadow: 2px 0 var(--accent);
+        }
+        100% {
+            opacity: 1;
+            box-shadow: none;
+        }
+    }
+    .staff-pass {
+        animation: pass-arrive 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes pass-arrive {
+        from {
+            opacity: 0;
+            translate: 0 -38px;
+            rotate: 9deg;
+        }
+        66% {
+            opacity: 1;
+            translate: 0 3px;
+            rotate: -2deg;
+        }
+        to {
+            translate: 0 0;
+            rotate: 0deg;
+        }
+    }
+    .staff-pass::after {
+        content: '';
+        position: absolute;
+        inset: -40% -80%;
+        pointer-events: none;
+        background: linear-gradient(112deg, transparent 40%, #fff8 49%, transparent 58%);
+        animation: pass-shine 660ms ease-out 360ms both;
+    }
+    @keyframes pass-shine {
+        from {
+            transform: translateX(-65%);
+        }
+        to {
+            transform: translateX(65%);
+        }
+    }
+    .scene-request[open] {
+        animation: request-arrive 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    @keyframes request-arrive {
+        from {
+            opacity: 0;
+            transform: translateX(22px) scale(0.98);
+        }
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
+    .scene-request .scene-label > svg:first-child {
+        transform-origin: 50% 12%;
+        animation: request-ring 600ms ease-out 160ms;
+    }
+    @keyframes request-ring {
+        20% {
+            transform: rotate(18deg);
+        }
+        48% {
+            transform: rotate(-13deg);
+        }
+        72% {
+            transform: rotate(7deg);
+        }
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .scene-instant {
+        display: none;
     }
 }
 @media (max-width: 540px) {

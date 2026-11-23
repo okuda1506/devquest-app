@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { ArrowRight, Bell, BriefcaseBusiness, ChevronRight, ExternalLink, GitBranch } from 'lucide-react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { ArrowRight, Bell, BriefcaseBusiness, ChevronRight, ExternalLink, GitBranch, Ticket } from 'lucide-react';
 import { tasks, team, template } from '../supabase/functions/quest/catalog';
 import './first-day.css';
 
@@ -43,6 +43,33 @@ const setupChecks = [
     { label: '店舗管理画面を開けた', host: 'localhost:5175' }
 ];
 
+function DialogueLine({ line, instant }: { line: string; instant: boolean }) {
+    let delay = 140;
+    return (
+        <p id="first-day-line" className="dialogue-line">
+            {instant ? (
+                line
+            ) : (
+                <>
+                    <span className="dialogue-transcript">{line}</span>
+                    <span aria-hidden="true">
+                        {Array.from(line).map((character, index) => {
+                            const hold = /[。！？]/u.test(character) ? 200 : /[、，]/u.test(character) ? 100 : 32;
+                            const style = { '--start': delay + 'ms', '--hold': hold + 'ms' } as CSSProperties;
+                            delay += hold;
+                            return (
+                                <span key={index} className="dialogue-letter" style={style}>
+                                    {character}
+                                </span>
+                            );
+                        })}
+                    </span>
+                </>
+            )}
+        </p>
+    );
+}
+
 function StaffPass() {
     return (
         <div className="pass-display" role="img" aria-label="配属先 THREAD、担当は開発エンジニア">
@@ -68,6 +95,7 @@ type FirstDayProps = {
 export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
     const [scene, setScene] = useState<Scene>('arrival');
     const [openedPages, setOpenedPages] = useState<string[]>([]);
+    const [instantDialogue, setInstantDialogue] = useState(false);
     const dialogRef = useRef<HTMLDialogElement>(null);
     const titleRef = useRef<HTMLHeadingElement>(null);
     const { step, label, title, next, line } = scenes[scene];
@@ -137,11 +165,16 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                         <strong>{speaker.name}</strong>
                         <small>{speaker.role}</small>
                     </div>
-                    {scene === 'request' && <span className="scene-ticket mono">{firstAssignment.id}</span>}
-                    <h2 id="first-day-title" ref={titleRef} tabIndex={-1}>
+                    {scene === 'request' && (
+                        <span className="scene-ticket mono">
+                            <Ticket size={14} aria-hidden="true" />
+                            {firstAssignment.id}
+                        </span>
+                    )}
+                    <h2 id="first-day-title" ref={titleRef} tabIndex={-1} aria-describedby="first-day-line">
                         {title}
                     </h2>
-                    <p id="first-day-line">{line}</p>
+                    <DialogueLine line={line} instant={instantDialogue} />
                     {scene === 'setup' && (
                         <div className="scene-setup-checklist">
                             <a className="button" href={setupReadme} target="_blank" rel="noopener noreferrer">
@@ -176,11 +209,21 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                 </div>
             </div>
             <div className="scene-controls">
-                <span className="scene-progress" role="img" aria-label={`全${sceneCount}場面のうち${step}番目`}>
-                    {Object.values(scenes).map(({ step: n }) => (
-                        <i aria-hidden="true" key={n} className={n <= step ? 'lit' : ''} />
-                    ))}
-                </span>
+                <div className="scene-reading-controls">
+                    <span className="scene-progress" role="img" aria-label={`全${sceneCount}場面のうち${step}番目`}>
+                        {Object.values(scenes).map(({ step: n }) => (
+                            <i aria-hidden="true" key={n} className={n <= step ? 'lit' : ''} />
+                        ))}
+                    </span>
+                    <label className="scene-instant">
+                        <input
+                            type="checkbox"
+                            checked={instantDialogue}
+                            onChange={(event) => setInstantDialogue(event.target.checked)}
+                        />
+                        全文表示
+                    </label>
+                </div>
                 <button
                     className="button primary"
                     onClick={advance}
