@@ -45,6 +45,7 @@ import { readPreference, savePreference } from './preferences';
 import './styles.css';
 import { FirstDay, firstAssignment } from './first-day';
 import { Documents } from './documents';
+import { CriterionResults, ticketDetails } from './ticket-details';
 
 function unlockedChapterFor(notice: Notice) {
     const task = getTask(notice.task_id);
@@ -70,6 +71,7 @@ export function App() {
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
     const [toast, setToast] = useState<Notice | null>(null);
+    const queuedToast = useRef<Notice | null>(null);
     const [menu, setMenu] = useState(false);
     const [theme, setTheme] = useState(() => (readPreference('devquest-theme') === 'dark' ? 'dark' : 'light'));
     const seen = useRef(new Set<number>());
@@ -94,6 +96,7 @@ export function App() {
                 activeUser.current = id;
                 setData(empty);
                 setToast(null);
+                queuedToast.current = null;
                 setBusy(false);
                 seen.current.clear();
             }
@@ -151,9 +154,23 @@ export function App() {
                     (notice.kind === 'assigned' || notice.kind === 'completed') &&
                     !seen.current.has(notice.id)
             );
-            const notification = pending.find((notice) => unlockedChapterFor(notice) !== undefined) ?? pending[0];
+            const completion =
+                input.action === 'grade'
+                    ? pending.find((notice) => notice.kind === 'completed' && notice.task_id === input.taskId)
+                    : undefined;
+            const notification =
+                completion ?? pending.find((notice) => unlockedChapterFor(notice) !== undefined) ?? pending[0];
             if (notification) {
                 for (const notice of next.notifications) seen.current.add(notice.id);
+                if (completion) {
+                    queuedToast.current =
+                        pending.find(
+                            (notice) =>
+                                notice.kind === 'assigned' && getTask(notice.task_id)?.previous === completion.task_id
+                        ) ?? null;
+                } else {
+                    queuedToast.current = null;
+                }
                 setToast(notification);
             }
             return true;
@@ -189,6 +206,11 @@ export function App() {
         void supabase?.auth.signOut({ scope: 'local' }).then(({ error }) => {
             if (error) setError('ログアウトできませんでした。');
         });
+
+    function dismissToast() {
+        setToast(queuedToast.current);
+        queuedToast.current = null;
+    }
 
     function finishFirstDay(openTicket: boolean) {
         savePreference('devquest-first-day', 'seen');
@@ -405,17 +427,23 @@ export function App() {
                     <Link
                         to={'/tasks/' + toast.task_id}
                         onClick={() => {
-                            setToast(null);
+                            dismissToast();
                             void action({ action: 'read', notificationId: toast.id });
                         }}
                     >
                         {unlockedChapter !== undefined && <small>チャプター解放 · {chapters[unlockedChapter]}</small>}
-                        <strong>{noticeText(toast)}</strong>
+                        <strong>
+                            {toast.kind === 'completed' && ticketDetails[toast.task_id]
+                                ? getTask(toast.task_id)?.requester.name + 'さんから完了コメントが届きました'
+                                : noticeText(toast)}
+                        </strong>
                         <small>
-                            {toast.task_id} · {getTask(toast.task_id)?.title}
+                            {toast.kind === 'completed' && ticketDetails[toast.task_id]
+                                ? ticketDetails[toast.task_id].reply
+                                : toast.task_id + ' · ' + getTask(toast.task_id)?.title}
                         </small>
                     </Link>
-                    <button className="icon-button" aria-label="通知を閉じる" onClick={() => setToast(null)}>
+                    <button className="icon-button" aria-label="通知を閉じる" onClick={dismissToast}>
                         <X size={17} />
                     </button>
                 </div>
@@ -784,7 +812,11 @@ function TicketContent({
     const location = useLocation();
     const fromFirstDay = location.state?.firstDay && task.id === firstAssignment.id;
     const reflectionRef = useRef<HTMLDivElement>(null);
+    const branchRef = useRef<HTMLDivElement>(null);
     const status = statusFor(home, task);
+    const details = ticketDetails[task.id];
+    const repoUrl = home.profile.repo_name ? 'https://github.com/' + home.profile.repo_name : null;
+    const checkGrade = () => void action({ action: 'grade', taskId: task.id });
     useEffect(() => {
         if (location.hash === '#reflection') reflectionRef.current?.focus();
     }, [location.key, location.hash, status]);
@@ -831,6 +863,65 @@ function TicketContent({
                     )}
                 </section>
             )}
+            <Block title="次にやること">
+                {status === 'completed' ? (
+                    next ? (
+                        <Link className="button primary" to={'/tasks/' + next.id}>
+                            次の依頼 {next.id} <ArrowRight size={15} />
+                        </Link>
+                    ) : (
+                        <Link className="button primary" to="/history">
+                            学習履歴を見る <ArrowRight size={15} />
+                        </Link>
+                    )
+                ) : demoMode || !repoUrl ? (
+                    <Link className="button primary" to="/settings">
+                        演習リポジトリを登録する <ArrowRight size={15} />
+                    </Link>
+                ) : status === 'not_started' ? (
+                    <>
+                        <p>作業ブランチを作り、改修したコミットを GitHub に push してください。</p>
+                        <button className="button primary" onClick={() => branchRef.current?.focus()}>
+                            ブランチ作成手順を見る <ArrowRight size={15} />
+                        </button>
+                    </>
+                ) : status === 'passed' ? (
+                    <>
+                        <p>作業ブランチから main への PR をマージし、採点結果欄でマージを確認してください。</p>
+                        <a
+                            className="button primary"
+                            href={repoUrl + '/compare/main...' + task.branch + '?expand=1'}
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            GitHub で PR を開く <ArrowUpRight size={15} />
+                        </a>
+                    </>
+                ) : (
+                    <>
+                        <p>
+                            {latest?.result === 'failed'
+                                ? '実行ログを確認し、修正を push してからもう一度採点結果を確認してください。'
+                                : 'GitHub Actions の実行が終わったら採点結果を確認してください。'}
+                        </p>
+                        <button className="button primary" disabled={busy} onClick={checkGrade}>
+                            採点結果を確認 <ArrowRight size={15} />
+                        </button>
+                    </>
+                )}
+            </Block>
+            {status === 'completed' && details && (
+                <Block title="依頼者からの完了コメント">
+                    <div className="requester">
+                        <span>{task.requester.initials}</span>
+                        <p>
+                            <strong>{task.requester.name}</strong>
+                            <small>{task.requester.role}</small>
+                        </p>
+                    </div>
+                    <p>{details.reply}</p>
+                </Block>
+            )}
             <div className="details-grid">
                 <div className="stack">
                     <Block title="改修依頼">
@@ -842,9 +933,20 @@ function TicketContent({
                             </p>
                         </div>
                         <p>{task.description}</p>
+                        {details && (
+                            <>
+                                <h3>依頼者メモ</h3>
+                                <p>{details.note}</p>
+                                <p className="muted">対象画面 · {details.surface}</p>
+                                <Link className="sub-link" to="/documents">
+                                    <FileText size={14} />
+                                    {details.reference} <ArrowUpRight size={14} />
+                                </Link>
+                            </>
+                        )}
                         {task.steps.length > 0 && (
                             <>
-                                <h3>確認手順</h3>
+                                <h3>再現・確認手順</h3>
                                 <ol>
                                     {task.steps.map((step) => (
                                         <li key={step}>{step}</li>
@@ -890,35 +992,37 @@ function TicketContent({
                     )}
                 </div>
                 <div className="stack">
-                    <Block title="作業ブランチ">
-                        <div className="branch-name">
-                            <GitBranch size={16} />
-                            <code>{task.branch}</code>
-                        </div>
-                        {ready ? (
-                            <>
-                                <Copy label="ブランチ名をコピー" value={task.branch} />
-                                <h3>ブランチ作成手順</h3>
-                                <pre>
-                                    <code>{commands}</code>
-                                </pre>
-                                <Copy label="コマンドをコピー" value={commands} />
+                    <div ref={branchRef} tabIndex={-1}>
+                        <Block title="作業ブランチ">
+                            <div className="branch-name">
+                                <GitBranch size={16} />
+                                <code>{task.branch}</code>
+                            </div>
+                            {ready ? (
+                                <>
+                                    <Copy label="ブランチ名をコピー" value={task.branch} />
+                                    <h3>ブランチ作成手順</h3>
+                                    <pre>
+                                        <code>{commands}</code>
+                                    </pre>
+                                    <Copy label="コマンドをコピー" value={commands} />
+                                    <p className="muted">
+                                        前の課題をマージした最新の main
+                                        を使います。未コミットの変更は先にコミットするか退避してください。指定ブランチがある場合は{' '}
+                                        <code>git switch {task.branch}</code> で切り替えます。
+                                    </p>
+                                </>
+                            ) : (
                                 <p className="muted">
-                                    前の課題をマージした最新の main
-                                    を使います。未コミットの変更は先にコミットするか退避してください。指定ブランチがある場合は{' '}
-                                    <code>git switch {task.branch}</code> で切り替えます。
+                                    {status === 'planned'
+                                        ? 'この課題は追加予定です。'
+                                        : task.previous
+                                          ? '前の課題を完了すると解放されます。'
+                                          : '演習リポジトリを登録すると解放されます。'}
                                 </p>
-                            </>
-                        ) : (
-                            <p className="muted">
-                                {status === 'planned'
-                                    ? 'この課題は追加予定です。'
-                                    : task.previous
-                                      ? '前の課題を完了すると解放されます。'
-                                      : '演習リポジトリを登録すると解放されます。'}
-                            </p>
-                        )}
-                    </Block>
+                            )}
+                        </Block>
+                    </div>
                     <Block title="採点結果">
                         {home.profile.repo_name && (
                             <a
@@ -940,6 +1044,14 @@ function TicketContent({
                                 <code>{latest.head_sha.slice(0, 7)}</code> · {dateLabel(latest.created_at)}
                             </p>
                         )}
+                        {latest && !demoMode && (
+                            <CriterionResults
+                                key={latest.run_url + latest.created_at}
+                                submission={latest}
+                                taskId={task.id}
+                                criteria={task.criteria}
+                            />
+                        )}
                         {progress?.pull_number && home.profile.repo_name && (
                             <p>
                                 <a
@@ -956,14 +1068,14 @@ function TicketContent({
                                 指定ブランチに push し、採点に合格したら自分で PR を main にマージしてください。
                             </p>
                         )}
-                        {ready && !demoMode && status !== 'completed' && (
+                        {ready && !demoMode && (status === 'not_started' || status === 'passed') && (
                             <button
                                 className="button primary"
                                 disabled={busy || !home.profile.repo_name}
-                                onClick={() => void action({ action: 'grade', taskId: task.id })}
+                                onClick={checkGrade}
                             >
                                 <Terminal size={15} />
-                                採点結果を確認
+                                {status === 'passed' ? 'マージを確認' : '採点結果を確認'}
                             </button>
                         )}
                         {demoMode && (

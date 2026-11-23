@@ -833,3 +833,33 @@ input {
         transform: rotate(-22deg) scale(0.8);
     }
 }
+
+.block .criterion-results {
+    list-style: none;
+    padding: 0;
+}
+.criterion-results li {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: start;
+    gap: 4px 8px;
+    padding: 8px 0;
+    border-top: 1px solid var(--line);
+}
+.criterion-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+    font-weight: 700;
+}
+.criterion-status.passed {
+    color: var(--green);
+}
+.criterion-status.failed {
+    color: var(--red);
+}
+.criterion-results li > a {
+    grid-column: 2;
+    font-size: 12px;
+}

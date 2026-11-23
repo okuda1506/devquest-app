@@ -1,6 +1,15 @@
 import { describe, expect, test, vi } from 'vitest';
 import { getTask, tasks, template, branchCommands } from './catalog';
-import { GithubError, inspectGrade, repoName, verifyProtection, verifyRepo, type Github, type Repo } from './github';
+import {
+    GithubError,
+    inspectGrade,
+    readCriteria,
+    repoName,
+    verifyProtection,
+    verifyRepo,
+    type Github,
+    type Repo
+} from './github';
 import { exchangeOAuth } from './oauth';
 
 const canonical = ['a'.repeat(40)];
@@ -192,4 +201,33 @@ test('OAuth 交換では GitHub トークンをブラウザに返さない', asy
     expect(session).toEqual({ access_token: 'access', refresh_token: 'refresh' });
     await expect(exchangeOAuth('x', 'v'.repeat(43), env, exchange)).rejects.toThrow(/確認情報/);
     expect(exchange).toHaveBeenCalledTimes(1);
+});
+
+test('保存済みの実行と再試行番号で完了条件の成否を取得する', async () => {
+    const getJobs: Github = async <T>(path: string) => {
+        expect(path).toBe('/repos/learner/thread/actions/runs/701/attempts/2/jobs?per_page=100');
+        return {
+            jobs: [
+                {
+                    name: 'grade',
+                    head_sha: changed,
+                    steps: [{ name: 'DevQuest criterion 3', status: 'completed', conclusion: 'success' }]
+                },
+                {
+                    name: 'grade',
+                    head_sha: sha,
+                    steps: [
+                        { name: 'DevQuest criterion 1', status: 'completed', conclusion: 'failure' },
+                        { name: 'DevQuest criterion 2', status: 'completed', conclusion: 'success' },
+                        { name: 'DevQuest criterion 3', status: 'completed', conclusion: 'skipped' }
+                    ]
+                }
+            ]
+        } as T;
+    };
+    await expect(readCriteria(getJobs, repo.full_name, 701, 2, sha, 3)).resolves.toEqual([
+        'failed',
+        'passed',
+        'unavailable'
+    ]);
 });

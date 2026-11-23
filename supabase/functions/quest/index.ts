@@ -5,6 +5,7 @@ import { getTask, tasks } from './catalog.ts';
 import {
     githubClient,
     inspectGrade,
+    readCriteria,
     readHead,
     repoName,
     templateBaselines,
@@ -59,6 +60,36 @@ Deno.serve(async (request) => {
             .filter(Boolean);
         const canonical = [...templateBaselines, ...additionalBaselines];
         let gradeMessage: string | undefined;
+
+        if (input.action === 'criteria') {
+            const task = typeof input.taskId === 'string' ? getTask(input.taskId) : undefined;
+            if (!task?.available || !learner.data.repo_id || typeof input.runUrl !== 'string') {
+                throw new QuestError('採点結果が見つかりません。', 404);
+            }
+            const result = await db
+                .from('submissions')
+                .select('run_id,run_attempt,head_sha')
+                .eq('user_id', userId)
+                .eq('task_id', task.id)
+                .eq('run_url', input.runUrl)
+                .order('run_attempt', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            checked(result);
+            if (!result.data) throw new QuestError('採点結果が見つかりません。', 404);
+            const repo = await github<Repo>('/repositories/' + learner.data.repo_id);
+            verifyRepo(repo, githubId, learner.data.repo_id);
+            const { run_id, run_attempt, head_sha } = result.data;
+            const criteria = await readCriteria(
+                github,
+                repoName(repo.full_name),
+                run_id,
+                run_attempt,
+                head_sha,
+                task.criteria.length
+            );
+            return Response.json({ criteria }, { headers: cors });
+        }
 
         if (input.action === 'register') {
             const name = repoName(input.repository);
