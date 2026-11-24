@@ -27,6 +27,7 @@ import {
     LogOut,
     Menu,
     Moon,
+    PanelLeftClose,
     Sun,
     Terminal,
     X
@@ -356,7 +357,7 @@ export function App() {
                         aria-label="サイドメニューを閉じる"
                         onClick={closeMenu}
                     >
-                        <X size={19} aria-hidden="true" />
+                        <PanelLeftClose size={19} aria-hidden="true" />
                     </button>
                 </div>
                 <div className="sidebar-body">
