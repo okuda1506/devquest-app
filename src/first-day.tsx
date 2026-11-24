@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
     ArrowLeft,
     ArrowRight,
@@ -13,6 +13,7 @@ import { tasks, template } from '../supabase/functions/quest/catalog';
 import { menuTour } from './sidebar-menu';
 import { SetupHelp } from './setup-help';
 import { DialogueLine, Speaker, useDialoguePlayback } from './dialogue-line';
+import { readPreference, savePreference } from './preferences';
 import './first-day.css';
 
 export const firstAssignment = tasks[0];
@@ -62,6 +63,31 @@ const setupChecks = [
     { label: 'EC サイトを開けた', host: 'localhost:5174' },
     { label: '店舗管理画面を開けた', host: 'localhost:5175' }
 ];
+const checkpointKey = 'devquest-first-day-checkpoint';
+
+export function clearFirstDayCheckpoint() {
+    savePreference(checkpointKey, '');
+}
+
+function readCheckpoint() {
+    const start = { scene: 'arrival' as Scene, menuIndex: 0, openedPages: [] as string[] };
+    try {
+        const saved = JSON.parse(readPreference(checkpointKey) ?? 'null');
+        if (!saved || typeof saved.scene !== 'string' || !Object.hasOwn(scenes, saved.scene)) return start;
+        return {
+            scene: saved.scene as Scene,
+            menuIndex:
+                Number.isInteger(saved.menuIndex) && saved.menuIndex >= 0 && saved.menuIndex < menuTour.length
+                    ? Number(saved.menuIndex)
+                    : 0,
+            openedPages: Array.isArray(saved.openedPages)
+                ? setupChecks.map(({ host }) => host).filter((host) => saved.openedPages.includes(host))
+                : []
+        };
+    } catch {
+        return start;
+    }
+}
 
 function StaffPass() {
     return (
@@ -86,9 +112,10 @@ type FirstDayProps = {
 };
 
 export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
-    const [scene, setScene] = useState<Scene>('arrival');
-    const [menuIndex, setMenuIndex] = useState(0);
-    const [openedPages, setOpenedPages] = useState<string[]>([]);
+    const [checkpoint] = useState(readCheckpoint);
+    const [scene, setScene] = useState<Scene>(checkpoint.scene);
+    const [menuIndex, setMenuIndex] = useState(checkpoint.menuIndex);
+    const [openedPages, setOpenedPages] = useState<string[]>(checkpoint.openedPages);
     const [instantDialogue, setInstantDialogue] = useState(false);
     const dialogRef = useRef<HTMLDialogElement>(null);
     const titleRef = useRef<HTMLHeadingElement>(null);
@@ -104,6 +131,10 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
               }
             : scenes[scene];
     const { typing, finish } = useDialoguePlayback(line, instantDialogue);
+
+    useEffect(() => {
+        savePreference(checkpointKey, JSON.stringify({ scene, menuIndex, openedPages }));
+    }, [scene, menuIndex, openedPages]);
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current!;

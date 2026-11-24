@@ -4,6 +4,7 @@ import { questSessionStorage } from './quest-session';
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const verifierKey = 'devquest-oauth-verifier';
+const returnKey = 'devquest-oauth-return';
 const storageKey = url ? 'sb-' + new URL(url).hostname.split('.')[0] + '-auth-token' : 'devquest-auth-token';
 const authStorage = questSessionStorage(storageKey);
 export const sessionExpiration = authStorage.expiration;
@@ -28,6 +29,7 @@ export async function signIn() {
         new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
     );
     sessionStorage.setItem(verifierKey, verifier);
+    sessionStorage.setItem(returnKey, location.hash && location.hash !== '#/' ? location.hash : '#/settings');
     const authorize = new URL(url + '/auth/v1/authorize');
     authorize.search = new URLSearchParams({
         provider: 'github',
@@ -42,11 +44,20 @@ export async function signIn() {
 export async function finishSignIn() {
     const params = new URLSearchParams(location.search);
     const code = params.get('code');
-    if (!code && !params.has('error')) return;
+    const oauthError = params.get('error') ?? params.get('error_code');
+    if (!code && !oauthError) return;
     const verifier = sessionStorage.getItem(verifierKey);
+    const returnHash = sessionStorage.getItem(returnKey);
     sessionStorage.removeItem(verifierKey);
+    sessionStorage.removeItem(returnKey);
     history.replaceState(null, '', location.pathname + location.hash);
-    if (!code || !verifier || !supabase) throw new Error('GitHub ログインを完了できませんでした。');
+    if (returnHash?.startsWith('#/') && returnHash !== location.hash) location.hash = returnHash;
+    if (oauthError === 'access_denied') {
+        throw new Error('GitHub のログインがキャンセルされました。「GitHub で始める」からやり直せます。');
+    }
+    if (!code || !verifier || !supabase) {
+        throw new Error('GitHub ログインを完了できませんでした。同じタブで最初からやり直してください。');
+    }
     const tokens = await callQuest<{ access_token: string; refresh_token: string }>({
         action: 'exchange',
         code,
@@ -61,19 +72,28 @@ export async function finishSignIn() {
     }
 }
 
+export class QuestRequestError extends Error {
+    constructor(
+        message: string,
+        readonly status?: number
+    ) {
+        super(message);
+    }
+}
+
 export async function callQuest<T>(body: Record<string, unknown>): Promise<T> {
     if (!supabase) throw new Error('Supabase の接続設定がありません。');
     if (body.action !== 'exchange' && !authStorage.expiration()) {
-        throw new Error('ログインの有効期限が切れました。もう一度ログインしてください。');
+        throw new QuestRequestError('ログインの有効期限が切れました。もう一度ログインしてください。', 401);
     }
     const { data, error } = await supabase.functions.invoke('quest', { body });
     if (error) {
         const response = error.context;
         if (response instanceof Response) {
             const details = await response.json().catch(() => null);
-            if (typeof details?.error === 'string') throw new Error(details.error);
+            if (typeof details?.error === 'string') throw new QuestRequestError(details.error, response.status);
         }
-        throw new Error('サーバーに接続できませんでした。少し待ってからお試しください。');
+        throw new QuestRequestError('サーバーに接続できませんでした。少し待ってからお試しください。');
     }
     return data as T;
 }

@@ -1,4 +1,5 @@
 import { getTask, tasks, type Task } from '../supabase/functions/quest/catalog';
+import type { GradeCheck } from '../supabase/functions/quest/grade-check';
 
 export type Status = 'not_started' | 'in_progress' | 'passed' | 'completed' | 'locked' | 'planned';
 export type Progress = {
@@ -29,6 +30,7 @@ export type Home = {
     submissions: Submission[];
     notifications: Notice[];
     gradeMessage?: string;
+    gradeCheck?: GradeCheck;
 };
 export const statusLabels: Record<Status, string> = {
     not_started: '未着手',

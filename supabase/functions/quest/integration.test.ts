@@ -37,6 +37,7 @@ type Fixture = {
     base?: string;
     relation?: string;
     conclusion?: string;
+    runStatus?: string;
     movingHead?: boolean;
 };
 function github({
@@ -48,6 +49,7 @@ function github({
     base = 'main',
     relation = 'ahead',
     conclusion = 'success',
+    runStatus = 'completed',
     movingHead
 }: Fixture = {}): Github {
     let readCount = 0;
@@ -91,7 +93,7 @@ function github({
                             head_repository: { id: repo.id },
                             repository: { id: repo.id },
                             path: workflow.path + '@refs/heads/' + task.branch,
-                            status: 'completed',
+                            status: runStatus,
                             conclusion
                         }
                     ]
@@ -164,13 +166,31 @@ describe('演習の判定', () => {
     });
 
     test('異なるブランチや過去のコミットの結果を合格にしない', async () => {
-        await expect(inspectGrade(github({ branch: 'task/DEV-999' }), canonical, repo, task, null)).rejects.toThrow(
-            /指定ブランチ/
-        );
+        await expect(inspectGrade(github({ branch: 'task/DEV-999' }), canonical, repo, task, null)).resolves.toEqual({
+            result: 'unsubmitted',
+            state: 'unsubmitted'
+        });
         expect(
             await inspectGrade(github({ runHead: changed, merged: true }), canonical, repo, task, null)
-        ).toMatchObject({ result: 'pending', merge: null });
+        ).toMatchObject({ result: 'pending', state: 'queued', run: 0, merge: null });
         await expect(inspectGrade(github({ movingHead: true }), canonical, repo, task, null)).rejects.toThrow(/更新/);
+    });
+
+    test('実行中や中断では不合格を記録せず、対象実行のログを返す', async () => {
+        const running = await inspectGrade(github({ runStatus: 'in_progress' }), canonical, repo, task, null);
+        expect(running).toMatchObject({
+            result: 'pending',
+            state: 'running',
+            url: 'https://github.com/learner/thread/actions/runs/701'
+        });
+        const interrupted = await inspectGrade(
+            github({ conclusion: 'cancelled', merged: true }),
+            canonical,
+            repo,
+            task,
+            null
+        );
+        expect(interrupted).toMatchObject({ result: 'pending', state: 'interrupted', merge: null });
     });
 
     test('採点ファイルの差し替えを拒否し、前の課題のマージを要求する', async () => {

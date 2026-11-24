@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { branchCommands, chapters, getTask, tasks, template, type Task } from '../supabase/functions/quest/catalog';
-import { callQuest, finishSignIn, sessionExpiration, signIn, supabase } from './client';
+import { callQuest, finishSignIn, QuestRequestError, sessionExpiration, signIn, supabase } from './client';
 import {
     chapterCompletion,
     currentTask,
@@ -51,7 +51,8 @@ import {
 } from './model';
 import { readPreference, savePreference } from './preferences';
 import './styles.css';
-import { FirstDay, firstAssignment } from './first-day';
+import { clearFirstDayCheckpoint, FirstDay, firstAssignment } from './first-day';
+import { GradeFeedback } from './grade-feedback';
 import { settingsLink, threadLink, workspaceLinks } from './sidebar-menu';
 import { Documents } from './documents';
 import { Copy } from './copy';
@@ -97,6 +98,7 @@ export function App() {
     const [theme, setTheme] = useState(() => (readPreference('devquest-theme') === 'dark' ? 'dark' : 'light'));
     const seen = useRef(new Set<number>());
     const activeUser = useRef<string | null>(null);
+    const grading = useRef<symbol | null>(null);
     const location = useLocation();
     const navigate = useNavigate();
     const projectRef = useRef<HTMLElement>(null);
@@ -116,6 +118,7 @@ export function App() {
         function updateUser(id: string | null) {
             if (id !== activeUser.current) {
                 activeUser.current = id;
+                grading.current = null;
                 latestHome.current = empty;
                 setData(empty);
                 setCelebration(undefined);
@@ -164,19 +167,26 @@ export function App() {
 
     const action = useCallback<Action>(async (input) => {
         const requester = activeUser.current;
+        const gradeTask = input.action === 'grade' && typeof input.taskId === 'string' ? input.taskId : undefined;
+        if (gradeTask && grading.current) return false;
+        const gradeRequest = gradeTask ? Symbol() : null;
+        if (gradeRequest) grading.current = gradeRequest;
         setBusy(true);
         setError('');
         setMessage('');
         try {
             const next = await callQuest<Home>(input);
             if (requester !== activeUser.current) return false;
-            if (input.action === 'grade' && typeof input.taskId === 'string') {
-                const completed = chapterCompletion(latestHome.current, next, input.taskId);
+            if (gradeTask) {
+                const completed = chapterCompletion(latestHome.current, next, gradeTask);
                 if (completed) setCelebration(completed);
             }
             latestHome.current = next;
-            setData(next);
-            if (next.gradeMessage) setMessage(next.gradeMessage);
+            setData((before) => ({
+                ...next,
+                gradeCheck: next.gradeCheck ?? (gradeTask ? undefined : before.gradeCheck)
+            }));
+            if (next.gradeMessage && !next.gradeCheck) setMessage(next.gradeMessage);
             const pending = next.notifications.filter(
                 (notice) =>
                     !notice.read_at &&
@@ -204,9 +214,19 @@ export function App() {
             }
             return true;
         } catch (cause) {
-            if (requester === activeUser.current) setError((cause as Error).message);
+            if (requester === activeUser.current) {
+                const detail = (cause as Error).message;
+                if (gradeTask) {
+                    const status = cause instanceof QuestRequestError ? cause.status : undefined;
+                    const state = !status || status >= 500 || status === 429 ? 'unavailable' : 'recheck';
+                    setData((before) => ({ ...before, gradeCheck: { taskId: gradeTask, state, detail } }));
+                } else {
+                    setError(detail);
+                }
+            }
             return false;
         } finally {
+            if (grading.current === gradeRequest) grading.current = null;
             if (requester === activeUser.current) setBusy(false);
         }
     }, []);
@@ -272,6 +292,7 @@ export function App() {
     }
 
     function finishFirstDay(openTicket: boolean) {
+        clearFirstDayCheckpoint();
         savePreference('devquest-first-day', 'seen');
         setShowFirstDay(false);
         if (openTicket) {
@@ -285,6 +306,7 @@ export function App() {
     }
 
     function replayFirstDay() {
+        if (!showFirstDay) clearFirstDayCheckpoint();
         setShowFirstDay(true);
         setMobileMenuOpen(false);
         navigate('/');
@@ -454,7 +476,7 @@ export function App() {
                         ) : (
                             <button className="button login" onClick={login} disabled={!supabase || loadingAuth}>
                                 <Github size={16} />
-                                GitHub でログイン
+                                GitHub で始める
                             </button>
                         )}
                     </div>
@@ -526,6 +548,7 @@ export function App() {
                                     demoMode={demoMode}
                                     login={login}
                                     replayFirstDay={replayFirstDay}
+                                    firstDaySeen={!showFirstDay}
                                 />
                             }
                         />
@@ -871,9 +894,17 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
     );
 }
 
-function Block({ title, children }: { title: string; children: ReactNode }) {
+function Block({
+    title,
+    children,
+    sectionRef
+}: {
+    title: string;
+    children: ReactNode;
+    sectionRef?: RefObject<HTMLElement | null>;
+}) {
     return (
-        <section className="panel block">
+        <section className="panel block" ref={sectionRef} tabIndex={sectionRef ? -1 : undefined}>
             <h2>{title}</h2>
             {children}
         </section>
@@ -920,6 +951,7 @@ function TicketContent({
     const fromFirstDay = location.state?.firstDay && task.id === firstAssignment.id;
     const reflectionRef = useRef<HTMLDivElement>(null);
     const branchRef = useRef<HTMLDivElement>(null);
+    const gradingRef = useRef<HTMLElement>(null);
     const status = statusFor(home, task);
     const details = ticketDetails[task.id];
     const repoUrl = home.profile.repo_name ? 'https://github.com/' + home.profile.repo_name : null;
@@ -936,6 +968,8 @@ function TicketContent({
     const attempts = home.submissions.filter((record) => record.task_id === task.id);
     const latestIndex = attempts.findIndex((record) => record.head_sha === progress?.head_sha);
     const latest = attempts[latestIndex];
+    const gradeCheck = status !== 'completed' && home.gradeCheck?.taskId === task.id ? home.gradeCheck : undefined;
+    const awaitingMerge = status === 'passed' && (!gradeCheck || gradeCheck.state === 'passed');
     const previousAttempt =
         latest &&
         attempts
@@ -1001,7 +1035,7 @@ function TicketContent({
                             ブランチ作成手順を見る <ArrowRight size={15} />
                         </button>
                     </>
-                ) : status === 'passed' ? (
+                ) : awaitingMerge ? (
                     <>
                         <p>作業ブランチから main への PR をマージし、採点結果欄でマージを確認してください。</p>
                         <a
@@ -1020,8 +1054,8 @@ function TicketContent({
                                 ? '実行ログを確認し、修正を push してからもう一度採点結果を確認してください。'
                                 : 'GitHub Actions の実行が終わったら採点結果を確認してください。'}
                         </p>
-                        <button className="button primary" disabled={busy} onClick={checkGrade}>
-                            採点結果を確認 <ArrowRight size={15} />
+                        <button className="button primary" onClick={() => gradingRef.current?.focus()}>
+                            採点結果欄へ <ArrowRight size={15} />
                         </button>
                     </>
                 )}
@@ -1127,7 +1161,26 @@ function TicketContent({
                             )}
                         </Block>
                     </div>
-                    <Block title="採点結果">
+                    <Block title="採点結果" sectionRef={gradingRef}>
+                        {!demoMode && home.profile.repo_name && ready && (
+                            <GradeFeedback
+                                check={
+                                    gradeCheck ?? {
+                                        taskId: task.id,
+                                        state:
+                                            status === 'completed'
+                                                ? 'completed'
+                                                : status === 'passed'
+                                                  ? 'passed'
+                                                  : latest?.result === 'failed'
+                                                    ? 'failed'
+                                                    : progress?.head_sha
+                                                      ? 'queued'
+                                                      : 'unsubmitted'
+                                    }
+                                }
+                            />
+                        )}
                         {home.profile.repo_name && (
                             <a
                                 className="sub-link"
@@ -1172,14 +1225,14 @@ function TicketContent({
                                 指定ブランチに push し、採点に合格したら自分で PR を main にマージしてください。
                             </p>
                         )}
-                        {ready && !demoMode && (status === 'not_started' || status === 'passed') && (
+                        {ready && !demoMode && status !== 'completed' && (
                             <button
                                 className="button primary"
                                 disabled={busy || !home.profile.repo_name}
                                 onClick={checkGrade}
                             >
                                 <Terminal size={15} />
-                                {status === 'passed' ? 'マージを確認' : '採点結果を確認'}
+                                {awaitingMerge ? 'マージを確認' : '採点結果を確認'}
                             </button>
                         )}
                         {demoMode && (
@@ -1295,7 +1348,8 @@ function Settings({
     busy,
     demoMode,
     login,
-    replayFirstDay
+    replayFirstDay,
+    firstDaySeen
 }: {
     replayFirstDay: () => void;
     home: Home;
@@ -1303,41 +1357,62 @@ function Settings({
     busy: boolean;
     demoMode: boolean;
     login: () => void;
+    firstDaySeen: boolean;
 }) {
-    async function register(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        const data = new FormData(event.currentTarget);
-        await action({ action: 'register', repository: data.get('repository') });
-    }
+    const assigned = currentTask(home);
     return (
         <>
             <Title
                 title="演習リポジトリの設定"
                 description="THREAD の自分専用リポジトリを作成し、DevQuest に登録します。"
             />
+            <Block title="GitHub アカウント">
+                {demoMode ? (
+                    <>
+                        <p>初回の GitHub ログインで DevQuest の学習用プロフィールを作成します。</p>
+                        <button className="button primary" disabled={!supabase || busy} onClick={login}>
+                            <Github size={16} /> GitHub で始める
+                        </button>
+                    </>
+                ) : (
+                    <p>
+                        {home.profile.github_login
+                            ? `@${home.profile.github_login} でログイン済み`
+                            : 'プロフィールを確認中…'}
+                    </p>
+                )}
+            </Block>
             <Block title="初出勤チュートリアル">
+                <p>
+                    チームの紹介と開発環境の起動確認を進められます。途中でブラウザを閉じても、次回は続きから開けます。
+                </p>
                 <button className="button" onClick={replayFirstDay}>
-                    着任の案内をもう一度見る <ArrowRight size={15} />
+                    {firstDaySeen ? '着任の案内をもう一度見る' : '着任の案内を開く'} <ArrowRight size={15} />
                 </button>
             </Block>
-            <Block title="演習を始める">
-                <ol>
-                    <li>GitHub でログインします。</li>
-                    <li>
-                        THREAD のテンプレートから個人所有の公開リポジトリを作成します。既定ブランチは main
-                        を使用してください。
-                    </li>
-                    <li>作成したリポジトリを登録し、ローカルで README の手順に沿って起動します。</li>
-                </ol>
-                <div className="actions">
-                    <a className="button" href={templateUrl + '/generate'} target="_blank" rel="noreferrer">
-                        <Github size={16} /> テンプレートを使う <ArrowUpRight size={14} />
-                    </a>
-                    <a className="sub-link" href={templateUrl + '#readme'} target="_blank" rel="noreferrer">
-                        THREAD のセットアップ手順 <ArrowUpRight size={14} />
-                    </a>
-                </div>
-            </Block>
+            {!home.profile.repo_name && (
+                <Block title="演習リポジトリを作成">
+                    <p id="repo-visibility">
+                        GitHub の作成画面で自分の個人アカウントを選び、公開範囲を <strong>Public（公開）</strong>{' '}
+                        にしてください。 既定ブランチは <code>main</code> を使います。提出コードや Actions
+                        のログは第三者にも見えるため、 実際の顧客データや秘密情報は入れないでください。
+                    </p>
+                    <div className="actions">
+                        <a
+                            className="button"
+                            href={templateUrl + '/generate'}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-describedby="repo-visibility"
+                        >
+                            <Github size={16} /> THREAD から作成する <ArrowUpRight size={14} />
+                        </a>
+                        <a className="sub-link" href={templateUrl + '#readme'} target="_blank" rel="noreferrer">
+                            THREAD のセットアップ手順 <ArrowUpRight size={14} />
+                        </a>
+                    </div>
+                </Block>
+            )}
             <Block title="リポジトリを登録">
                 {home.profile.repo_name ? (
                     <>
@@ -1349,34 +1424,55 @@ function Settings({
                         >
                             {home.profile.repo_name} <ArrowUpRight size={14} />
                         </a>
-                        <p>
-                            <Link to="/" className="sub-link">
-                                ダッシュボードで依頼を確認 <ArrowDownRight size={15} />
-                            </Link>
-                        </p>
+                        <p>登録済みです。作業ブランチや採点手順は担当課題で確認できます。</p>
+                        <Link to={assigned ? '/tasks/' + assigned.id : '/'} className="sub-link">
+                            担当の依頼を確認 <ArrowDownRight size={15} />
+                        </Link>
                     </>
                 ) : demoMode ? (
-                    <button className="button primary" disabled={!supabase} onClick={login}>
-                        <Github size={16} /> GitHub でログイン
-                    </button>
+                    <p>GitHub でログインすると、ここから作成済みのリポジトリを登録できます。</p>
                 ) : (
-                    <form onSubmit={register}>
-                        <label className="repo-field">
-                            GitHub の所有者名/リポジトリ名
-                            <input
-                                name="repository"
-                                placeholder="所有者名/リポジトリ名"
-                                autoComplete="off"
-                                required
-                                maxLength={180}
-                            />
-                        </label>
-                        <button className="button primary" disabled={busy}>
-                            登録する <ArrowRight size={15} />
-                        </button>
-                    </form>
+                    home.profile.github_login && (
+                        <RepositoryForm
+                            key={home.profile.github_login}
+                            login={home.profile.github_login}
+                            busy={busy}
+                            action={action}
+                        />
+                    )
                 )}
             </Block>
         </>
+    );
+}
+
+function RepositoryForm({ login, busy, action }: { login: string; busy: boolean; action: Action }) {
+    const draftKey = 'devquest-repository-draft:' + login;
+    const [repository, setRepository] = useState(() => readPreference(draftKey) ?? '');
+    async function register(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (await action({ action: 'register', repository })) savePreference(draftKey, '');
+    }
+    return (
+        <form onSubmit={register}>
+            <label className="repo-field">
+                GitHub のリポジトリ URL または所有者名/リポジトリ名
+                <input
+                    name="repository"
+                    placeholder={`https://github.com/${login}/thread`}
+                    value={repository}
+                    onChange={(event) => {
+                        setRepository(event.target.value);
+                        savePreference(draftKey, event.target.value);
+                    }}
+                    autoComplete="off"
+                    required
+                    maxLength={180}
+                />
+            </label>
+            <button className="button primary" disabled={busy || !repository.trim()}>
+                登録する <ArrowRight size={15} />
+            </button>
+        </form>
     );
 }

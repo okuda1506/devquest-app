@@ -1,7 +1,8 @@
-import { authenticate } from './auth.ts';
+import { authenticate, questDatabase } from './auth.ts';
 import { exchangeOAuth } from './oauth.ts';
 import { QuestError } from './auth-errors.ts';
 import { getTask, tasks } from './catalog.ts';
+import type { GradeCheck } from './grade-check.ts';
 import {
     githubClient,
     inspectGrade,
@@ -17,26 +18,52 @@ import {
 const env = (name: string) => Deno.env.get(name);
 const cors = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
     'Cache-Control': 'no-store'
 };
 
 function checked(result: { error: { code?: string } | null }, message = 'データを保存または取得できませんでした。') {
-    if (result.error) throw new QuestError(message, 409);
+    if (result.error) throw new QuestError(message, 503);
 }
 
 Deno.serve(async (request) => {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const startedAt = Date.now();
+    const log: {
+        action?: string;
+        learnerId?: string;
+        taskId?: string;
+        repoId?: number;
+        sha?: string;
+        runId?: number;
+        runAttempt?: number;
+        outcome?: string;
+        status?: number;
+    } = {};
     try {
+        if (request.method === 'GET' && new URL(request.url).pathname.endsWith('/health')) {
+            log.action = 'health';
+            const { data, error } = await questDatabase(env)
+                .from('quest_order')
+                .select('position')
+                .eq('position', tasks.length)
+                .abortSignal(AbortSignal.timeout(4000))
+                .maybeSingle();
+            if (error || !data) throw new QuestError('サービスを確認できません。', 503);
+            return Response.json({ status: 'ok' }, { headers: cors });
+        }
         if (request.method !== 'POST') throw new QuestError('この操作は利用できません。', 405);
         const input = await request.json().catch(() => null);
         if (!input || typeof input.action !== 'string') throw new QuestError('操作を指定してください。');
+        if (['grade', 'register', 'exchange', 'home', 'criteria', 'read'].includes(input.action))
+            log.action = input.action;
 
         if (input.action === 'exchange') {
             return Response.json(await exchangeOAuth(input.code, input.verifier, env), { headers: cors });
         }
         const { db, userId, githubId, login } = await authenticate(request, env);
+        log.learnerId = userId;
         const created = await db
             .from('learners')
             .upsert(
@@ -59,7 +86,7 @@ Deno.serve(async (request) => {
             .map((value) => value.trim())
             .filter(Boolean);
         const canonical = [...templateBaselines, ...additionalBaselines];
-        let gradeMessage: string | undefined;
+        let gradeCheck: GradeCheck | undefined;
 
         if (input.action === 'criteria') {
             const task = typeof input.taskId === 'string' ? getTask(input.taskId) : undefined;
@@ -95,19 +122,38 @@ Deno.serve(async (request) => {
 
         if (input.action === 'register') {
             const name = repoName(input.repository);
-            const repo = await github<Repo>('/repos/' + name);
+            const repo = await github<Repo>('/repos/' + name).catch((error) => {
+                if (error instanceof QuestError && error.status === 404) {
+                    throw new QuestError(
+                        'リポジトリを取得できません。URL が正しいか、GitHub の Settings で Public に設定されているかを確認してください。',
+                        404
+                    );
+                }
+                throw error;
+            });
+            log.repoId = repo.id;
             verifyRepo(repo, githubId);
             const sha = await readHead(github, repo.full_name, 'main');
             if (!sha) throw new QuestError('main ブランチを確認できません。');
             await verifyProtection(github, canonical, repo.full_name, sha);
-            checked(
-                await db.rpc('register_learner_repo', { p_user: userId, p_repo: repo.id, p_name: repo.full_name }),
-                '演習用リポジトリはすでに登録済みか、別の利用者に紐付いています。'
-            );
+            const registered = await db.rpc('register_learner_repo', {
+                p_user: userId,
+                p_repo: repo.id,
+                p_name: repo.full_name
+            });
+            if (registered.error?.code === '23505' || registered.error?.message === 'repo_already_registered') {
+                throw new QuestError(
+                    '別の演習用リポジトリが登録済みか、このリポジトリは別の利用者に紐付いています。設定をご確認ください。',
+                    409
+                );
+            }
+            checked(registered);
         } else if (input.action === 'grade') {
             const task = typeof input.taskId === 'string' ? getTask(input.taskId) : undefined;
             if (!task?.available) throw new QuestError('採点対象の課題が見つかりません。', 404);
             if (!learner.data?.repo_id) throw new QuestError('演習用リポジトリを先に登録してください。');
+            log.taskId = task.id;
+            log.repoId = learner.data.repo_id;
             const progress = await db.from('progress').select('task_id,status,merge_sha').eq('user_id', userId);
             checked(progress);
             const current = progress.data?.find((row) => row.task_id === task.id);
@@ -128,9 +174,16 @@ Deno.serve(async (request) => {
                 }
                 const checkedAt = new Date().toISOString();
                 const grade = await inspectGrade(github, canonical, repo, task, previous?.merge_sha ?? null);
-                const next = tasks.find((candidate) => candidate.available && candidate.previous === task.id);
-                checked(
-                    await db.rpc('record_grade', {
+                log.outcome = grade.state;
+                gradeCheck = { taskId: task.id, state: grade.state };
+                if (grade.result !== 'unsubmitted') {
+                    log.sha = grade.sha;
+                    log.runId = grade.run || undefined;
+                    log.runAttempt = grade.attempt || undefined;
+                    gradeCheck.sha = grade.sha;
+                    gradeCheck.runUrl = grade.url ? grade.url + '/attempts/' + grade.attempt : undefined;
+                    const next = tasks.find((candidate) => candidate.available && candidate.previous === task.id);
+                    const saved = await db.rpc('record_grade', {
                         p_user: userId,
                         p_repo: repo.id,
                         p_task: task.id,
@@ -144,17 +197,15 @@ Deno.serve(async (request) => {
                         p_pr: grade.pull,
                         p_merge: grade.merge,
                         p_checked_at: checkedAt
-                    }),
-                    '採点結果を保存できませんでした。時間をおいて再確認してください。'
-                );
-                gradeMessage = grade.merge
-                    ? 'PR のマージを確認しました。課題は完了です。'
-                    : grade.result === 'passed'
-                      ? '採点に合格しました。GitHub で PR を作成・マージし、もう一度確認してください。'
-                      : grade.result === 'failed'
-                        ? 'テストに不合格でした。GitHub Actions の結果を確認してください。'
-                        : 'このコミットは採点待ちです。GitHub Actions の完了後に再確認してください。';
-            } else gradeMessage = 'この課題は完了しています。';
+                    });
+                    checked(saved, '採点結果を保存できませんでした。時間をおいて再確認してください。');
+                    if (saved.data === 'completed') gradeCheck.state = 'completed';
+                    log.outcome = gradeCheck.state;
+                }
+            } else {
+                gradeCheck = { taskId: task.id, state: 'completed' };
+                log.outcome = 'completed';
+            }
         } else if (input.action === 'read') {
             if (!Number.isSafeInteger(input.notificationId)) throw new QuestError('通知を指定してください。');
             checked(
@@ -196,11 +247,12 @@ Deno.serve(async (request) => {
                 progress: progress.data,
                 submissions: submissions.data,
                 notifications: notifications.data,
-                gradeMessage
+                gradeCheck
             },
             { headers: cors }
         );
     } catch (error) {
+        log.status = error instanceof QuestError ? error.status : 500;
         if (error instanceof QuestError)
             return Response.json({ error: error.message }, { status: error.status, headers: cors });
         console.error('課題 API で内部エラーが発生しました。', error instanceof Error ? error.name : 'Unknown');
@@ -208,5 +260,16 @@ Deno.serve(async (request) => {
             { error: '処理に失敗しました。少し待ってからお試しください。' },
             { status: 500, headers: cors }
         );
+    } finally {
+        if (log.status || log.action === 'grade' || log.action === 'register') {
+            console.info(
+                JSON.stringify({
+                    event: 'quest_request',
+                    ...log,
+                    status: log.status ?? 200,
+                    elapsedMs: Date.now() - startedAt
+                })
+            );
+        }
     }
 });

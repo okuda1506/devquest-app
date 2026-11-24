@@ -1,5 +1,6 @@
 import { template, type Task } from './catalog.ts';
 import { QuestError } from './auth-errors.ts';
+import type { GradeState } from './grade-check.ts';
 
 export class GithubError extends QuestError {
     constructor(
@@ -104,12 +105,15 @@ export function repoName(value: unknown) {
 }
 
 export function verifyRepo(repo: Repo, githubId: number, id?: number) {
-    if (repo.owner.id !== githubId || (id !== undefined && repo.id !== id)) {
+    if (repo.owner.id !== githubId) {
+        throw new QuestError('ログイン中の GitHub アカウントが個人で所有するリポジトリを指定してください。', 403);
+    }
+    if (id !== undefined && repo.id !== id) {
         throw new QuestError('ログイン中の GitHub アカウントが所有する登録済みリポジトリを指定してください。', 403);
     }
-    if (repo.private || repo.archived || repo.default_branch !== 'main') {
-        throw new QuestError('演習用リポジトリは公開し、既定ブランチを main にしてください。');
-    }
+    if (repo.private) throw new QuestError('GitHub の Settings で演習用リポジトリを Public（公開）にしてください。');
+    if (repo.archived) throw new QuestError('演習用リポジトリのアーカイブを解除してください。');
+    if (repo.default_branch !== 'main') throw new QuestError('GitHub の Settings で既定ブランチを main にしてください。');
     if (
         repo.full_name.toLowerCase() === template ||
         (repo.template_repository && repo.template_repository.full_name.toLowerCase() !== template)
@@ -210,15 +214,18 @@ export async function readCriteria(
     });
 }
 
-export type Grade = {
-    sha: string;
-    run: number;
-    attempt: number;
-    url: string;
-    result: 'pending' | 'failed' | 'passed';
-    pull: number | null;
-    merge: string | null;
-};
+type Grade =
+    | { result: 'unsubmitted'; state: 'unsubmitted' }
+    | {
+          sha: string;
+          run: number;
+          attempt: number;
+          url: string;
+          result: 'pending' | 'failed' | 'passed';
+          state: Exclude<GradeState, 'unsubmitted'>;
+          pull: number | null;
+          merge: string | null;
+      };
 
 async function ancestor(github: Github, repo: string, base: string, head: string) {
     if (!shaPattern.test(base) || !shaPattern.test(head)) return false;
@@ -263,7 +270,8 @@ export async function inspectGrade(
         )
         .sort((a, b) => (b.merged_at ?? '').localeCompare(a.merged_at ?? ''))[0];
     const sha = head ?? merged?.head.sha;
-    if (!sha || !shaPattern.test(sha)) throw new QuestError('指定ブランチへの push を確認できませんでした。');
+    if (!sha) return { result: 'unsubmitted', state: 'unsubmitted' };
+    if (!shaPattern.test(sha)) throw new QuestError('コミットを確認できませんでした。');
     if (previousMerge && !(await ancestor(github, repo.full_name, previousMerge, sha))) {
         throw new QuestError('前の課題がマージされた main を作業ブランチに取り込んでください。');
     }
@@ -293,7 +301,8 @@ export async function inspectGrade(
         )
         .sort((a, b) => b.id - a.id || b.run_attempt - a.run_attempt)[0];
 
-    const result = !run || run.status !== 'completed' ? 'pending' : run.conclusion === 'success' ? 'passed' : 'failed';
+    const conclusion = run?.status === 'completed' ? run.conclusion : null;
+    const result = conclusion === 'success' ? 'passed' : conclusion === 'failure' ? 'failed' : 'pending';
     const merge =
         result === 'passed' &&
         merged?.merge_commit_sha &&
@@ -304,12 +313,22 @@ export async function inspectGrade(
     if (head !== (await readHead(github, repo.full_name, task.branch))) {
         throw new QuestError('照合中にブランチが更新されました。もう一度確認してください。', 409);
     }
+    const state = merge
+        ? 'completed'
+        : result !== 'pending'
+          ? result
+          : run?.status === 'completed'
+            ? 'interrupted'
+            : run?.status === 'in_progress'
+              ? 'running'
+              : 'queued';
     return {
         sha,
         run: run?.id ?? 0,
         attempt: run?.run_attempt ?? 0,
         url: run ? 'https://github.com/' + repo.full_name + '/actions/runs/' + run.id : '',
         result,
+        state,
         pull: merge ? merged.number : null,
         merge
     };

@@ -926,3 +926,10 @@ input {
     display: flex;
     margin-top: 4px;
 }
+.feedback.grade-feedback {
+    display: block;
+}
+.block .grade-feedback p {
+    margin: 4px 0 0;
+    color: inherit;
+}
