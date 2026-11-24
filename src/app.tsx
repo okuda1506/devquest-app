@@ -27,7 +27,6 @@ import {
     LogOut,
     Menu,
     Moon,
-    PanelLeftClose,
     Sun,
     Terminal,
     X
@@ -92,7 +91,7 @@ export function App() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const menuOpen = isMobile ? mobileMenuOpen : desktopMenuOpen;
     const menuToggleRef = useRef<HTMLButtonElement>(null);
-    const mobileCloseRef = useRef<HTMLButtonElement>(null);
+    const menuCloseRef = useRef<HTMLButtonElement>(null);
     const sidebarRef = useRef<HTMLElement>(null);
     const [theme, setTheme] = useState(() => (readPreference('devquest-theme') === 'dark' ? 'dark' : 'light'));
     const seen = useRef(new Set<number>());
@@ -304,16 +303,9 @@ export function App() {
         requestAnimationFrame(() => menuToggleRef.current?.focus({ preventScroll: true }));
     }
 
-    function toggleMenu() {
-        if (menuOpen) {
-            closeMenu();
-            return;
-        }
+    function openMenu() {
         setMenuOpen(true);
-        requestAnimationFrame(() => {
-            const firstControl = isMobile ? mobileCloseRef.current : sidebarRef.current?.querySelector('a');
-            firstControl?.focus({ preventScroll: true });
-        });
+        requestAnimationFrame(() => menuCloseRef.current?.focus({ preventScroll: true }));
     }
 
     function closeMobileMenuAfterNavigation() {
@@ -331,11 +323,7 @@ export function App() {
             className={'shell' + (menuOpen ? ' sidebar-open' : '')}
             onKeyDown={(event) => {
                 if (event.key !== 'Escape' || event.defaultPrevented || !menuOpen || touring || celebration) return;
-                if (
-                    isMobile ||
-                    sidebarRef.current?.contains(event.target as Node) ||
-                    event.target === menuToggleRef.current
-                ) {
+                if (isMobile || sidebarRef.current?.contains(event.target as Node)) {
                     event.preventDefault();
                     closeMenu();
                 }
@@ -364,7 +352,7 @@ export function App() {
                     <button
                         type="button"
                         className="icon-button sidebar-close"
-                        ref={mobileCloseRef}
+                        ref={menuCloseRef}
                         aria-label="サイドメニューを閉じる"
                         onClick={closeMenu}
                     >
@@ -406,21 +394,19 @@ export function App() {
             <div className="workspace" inert={mobileDrawerOpen}>
                 <header className="topbar">
                     <div className="breadcrumb">
-                        <button
-                            type="button"
-                            className="icon-button"
-                            ref={menuToggleRef}
-                            aria-label={menuOpen ? 'サイドメニューを閉じる' : 'サイドメニューを開く'}
-                            aria-controls="workspace-sidebar"
-                            aria-expanded={menuOpen}
-                            onClick={toggleMenu}
-                        >
-                            {menuOpen ? (
-                                <PanelLeftClose size={19} aria-hidden="true" />
-                            ) : (
+                        {!menuOpen && (
+                            <button
+                                type="button"
+                                className="icon-button"
+                                ref={menuToggleRef}
+                                aria-label="サイドメニューを開く"
+                                aria-controls="workspace-sidebar"
+                                aria-expanded={false}
+                                onClick={openMenu}
+                            >
                                 <Menu size={19} aria-hidden="true" />
-                            )}
-                        </button>
+                            </button>
+                        )}
                         <span>ワークスペース</span>
                         <span aria-hidden="true">/</span>
                         <strong>{crumb}</strong>
