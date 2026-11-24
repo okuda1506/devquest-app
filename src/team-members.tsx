@@ -14,37 +14,33 @@ const profiles = {
         column: 0,
         expression: 'neutral',
         specialty: '要件整理と進行管理',
-        quote: 'この改修で、誰の何が楽になるかな？',
-        work: '店舗スタッフの相談を聞き、開発チームが一度に取り組める大きさの依頼にまとめる。締め切りが重なったときは、お客様への影響をもとに順番を決める。',
-        habit: '朝会には小さなノートを持ってくる。話がまとまると、最後に「今日決めたこと」を一行で読み返す。'
+        work: '店舗スタッフの「ちょっとお願い」を聞き、開発チームが着手できる大きさのチケットにする。「ちょっと」にしては長い話も、誰が何に困っているかまで丁寧に聞く。',
+        habit: '朝会で「最後に一つだけ」と言ったら、本当に一つで終わる。ただし、その一つに箇条書きが三つあることはある。'
     },
     director: {
         column: 1,
         expression: 'talking',
         specialty: '購入体験と画面設計',
-        quote: 'そのボタン、片手で探しても見つかる？',
-        work: '服を探してから購入するまでの画面を設計する。店頭でお客様が使う言葉をメモして、ボタンの文言や商品の見せ方に活かしている。',
-        habit: 'レビューの最初にスマートフォンを取り出す。迷ったところはスクリーンショットを撮って、変更前後を並べて見せる。'
+        work: '服を探してから買うまでの画面を設計する。カートにたどり着くまでに三回迷った画面を、レビューで「ちょっとした街歩き」と呼んだことがある。',
+        habit: 'レビューはスマホ片手で始める。気づいた箇所はスクリーンショットで共有するので、チーム内ではどの端末よりも鈴木の親指が先に仕様を覚えると言われている。'
     },
     ops: {
         column: 2,
         expression: 'happy',
         specialty: '店舗運用と障害調査',
-        quote: '最後にうまく動いたのは、いつだった？',
-        work: '注文や在庫が店舗に正しく届くようにシステムを見守る。トラブルが起きると、操作時刻とログを突き合わせて原因を絞り込む。',
-        habit: '引き継ぎの前に手順書を自分で試す。初めて読む人が迷ったところには、翌日さりげなく一言書き足している。'
+        work: '注文や在庫が店舗に正しく届くように見守る。「さっきまで動いていた」と聞くと穏やかに「さっきは何時ごろ？」と返し、その時刻のログを開く。',
+        habit: '引き継ぎ前には手順書を自分で最初から試す。「あとはいつも通り」と書かれた箇所を見つけると、必要な手順を静かに書き足す。'
     },
     qa: {
         column: 3,
         expression: 'talking',
         specialty: '品質保証と再現手順',
-        quote: '同じことがもう一度起きるか、一緒に試そう。',
-        work: 'お客様から届いた違和感を再現し、どの操作で何が起きるかを整理する。修正後は、元の操作とその前後の流れをもう一度確かめる。',
-        habit: 'うまくいったケースも記録に残す。失敗したケースのすぐ隣に並べると、小さな違いに気づきやすいらしい。'
+        work: 'お客様が遭遇した不具合を再現して、誰でも同じ手順で確認できるようにする。「たまに起きます」と聞くと少しうれしそうになる。再現できた日はもっとうれしそう。',
+        habit: '修正後は在庫0件と1件のように、表示が切り替わる境目を並べて試す。テスト用のカートでは同じTシャツを何度も買っているが、クローゼットにはまだ一枚もない。'
     }
 } satisfies Record<
     MemberId,
-    { column: number; expression: Expression; specialty: string; quote: string; work: string; habit: string }
+    { column: number; expression: Expression; specialty: string; work: string; habit: string }
 >;
 
 export const memberIds = Object.keys(profiles) as MemberId[];
@@ -150,7 +146,6 @@ export function MemberProfile({ home }: { home: Home }) {
                         <h1 ref={headingRef} tabIndex={-1}>
                             {team[member].name}
                         </h1>
-                        <blockquote>「{profile.quote}」</blockquote>
                     </div>
                 </header>
                 <dl className="member-bio">

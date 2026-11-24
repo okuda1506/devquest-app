@@ -100,9 +100,6 @@
 .member-intro > div {
     padding: 14px 16px 14px 0;
 }
-.member-intro blockquote {
-    margin: 12px 0 0;
-}
 .member-bio {
     display: grid;
     grid-template-columns: auto 1fr;
@@ -159,10 +156,6 @@
     }
     .member-intro > div {
         padding: 0;
-    }
-    .member-intro blockquote {
-        margin-top: 6px;
-        font-size: 13px;
     }
     .member-requests li a {
         grid-template-columns: auto 1fr;

@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react';
+import {
+    useCallback,
+    useEffect,
+    useRef,
+    useState,
+    useSyncExternalStore,
+    type FormEvent,
+    type ReactNode,
+    type RefObject
+} from 'react';
 import {
     ArrowDownRight,
     ArrowRight,
@@ -18,6 +27,7 @@ import {
     LogOut,
     Menu,
     Moon,
+    PanelLeftClose,
     Sun,
     Terminal,
     X
@@ -58,6 +68,13 @@ function unlockedChapterFor(notice: Notice) {
 
 type Action = (input: Record<string, unknown>) => Promise<boolean>;
 const templateUrl = 'https://github.com/' + template;
+const mobileViewport = '(max-width: 650px)';
+
+function subscribeViewport(update: () => void) {
+    const media = window.matchMedia(mobileViewport);
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+}
 
 export function App() {
     const [userId, setUserId] = useState<string | null>(null);
@@ -70,7 +87,13 @@ export function App() {
     const [message, setMessage] = useState('');
     const [toast, setToast] = useState<Notice | null>(null);
     const queuedToast = useRef<Notice | null>(null);
-    const [menu, setMenu] = useState(false);
+    const isMobile = useSyncExternalStore(subscribeViewport, () => window.matchMedia(mobileViewport).matches);
+    const [desktopMenuOpen, setDesktopMenuOpen] = useState(() => readPreference('devquest-sidebar') !== 'closed');
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const menuOpen = isMobile ? mobileMenuOpen : desktopMenuOpen;
+    const menuToggleRef = useRef<HTMLButtonElement>(null);
+    const mobileCloseRef = useRef<HTMLButtonElement>(null);
+    const sidebarRef = useRef<HTMLElement>(null);
     const [theme, setTheme] = useState(() => (readPreference('devquest-theme') === 'dark' ? 'dark' : 'light'));
     const seen = useRef(new Set<number>());
     const activeUser = useRef<string | null>(null);
@@ -79,6 +102,7 @@ export function App() {
     const projectRef = useRef<HTMLElement>(null);
     const [showFirstDay, setShowFirstDay] = useState(() => readPreference('devquest-first-day') !== 'seen');
     const touring = showFirstDay && location.pathname === '/' && !loadingAuth;
+    const mobileDrawerOpen = isMobile && mobileMenuOpen && !touring;
     const demoMode = !userId;
     const home = demoMode ? demo : data;
     const unread = home.notifications.filter((notice) => !notice.read_at).length;
@@ -262,15 +286,65 @@ export function App() {
 
     function replayFirstDay() {
         setShowFirstDay(true);
-        setMenu(false);
+        setMobileMenuOpen(false);
         navigate('/');
     }
 
+    function setMenuOpen(open: boolean) {
+        if (isMobile) {
+            setMobileMenuOpen(open);
+        } else {
+            setDesktopMenuOpen(open);
+            savePreference('devquest-sidebar', open ? 'open' : 'closed');
+        }
+    }
+
+    function closeMenu() {
+        setMenuOpen(false);
+        requestAnimationFrame(() => menuToggleRef.current?.focus({ preventScroll: true }));
+    }
+
+    function toggleMenu() {
+        if (menuOpen) {
+            closeMenu();
+            return;
+        }
+        setMenuOpen(true);
+        requestAnimationFrame(() => {
+            const firstControl = isMobile ? mobileCloseRef.current : sidebarRef.current?.querySelector('a');
+            firstControl?.focus({ preventScroll: true });
+        });
+    }
+
+    function closeMobileMenuAfterNavigation() {
+        if (!isMobile) return;
+        setMobileMenuOpen(false);
+        requestAnimationFrame(() => {
+            if (document.activeElement === document.body) {
+                document.getElementById('main-content')?.focus({ preventScroll: true });
+            }
+        });
+    }
+
     return (
-        <div className="shell">
+        <div
+            className={'shell' + (menuOpen ? ' sidebar-open' : '')}
+            onKeyDown={(event) => {
+                if (event.key !== 'Escape' || event.defaultPrevented || !menuOpen || touring || celebration) return;
+                if (
+                    isMobile ||
+                    sidebarRef.current?.contains(event.target as Node) ||
+                    event.target === menuToggleRef.current
+                ) {
+                    event.preventDefault();
+                    closeMenu();
+                }
+            }}
+        >
             <a
                 className="skip-link"
                 href="#main-content"
+                inert={mobileDrawerOpen}
                 onClick={(event) => {
                     event.preventDefault();
                     document.getElementById('main-content')?.focus();
@@ -278,18 +352,30 @@ export function App() {
             >
                 本文へ移動
             </a>
-            <aside className={'sidebar' + (menu ? ' open' : '')} aria-label="サイドバー">
-                <Link className="brand" to="/" onClick={() => setMenu(false)}>
-                    <span className="brand-icon">
-                        <Code2 size={21} />
-                    </span>
-                    <strong>DevQuest</strong>
-                </Link>
+            {mobileDrawerOpen && <div className="sidebar-backdrop" aria-hidden="true" onClick={closeMenu} />}
+            <aside id="workspace-sidebar" className="sidebar" ref={sidebarRef} aria-label="サイドバー">
+                <div className="sidebar-header">
+                    <Link className="brand" to="/" onClick={closeMobileMenuAfterNavigation}>
+                        <span className="brand-icon">
+                            <Code2 size={21} />
+                        </span>
+                        <strong>DevQuest</strong>
+                    </Link>
+                    <button
+                        type="button"
+                        className="icon-button sidebar-close"
+                        ref={mobileCloseRef}
+                        aria-label="サイドメニューを閉じる"
+                        onClick={closeMenu}
+                    >
+                        <X size={19} aria-hidden="true" />
+                    </button>
+                </div>
                 <div className="sidebar-body">
                     <span className="nav-label">ワークスペース</span>
                     <nav aria-label="メインメニュー">
                         {workspaceLinks.map(({ id, to, label, icon: Icon }) => (
-                            <NavLink key={id} id={id} to={to} end={to === '/'} onClick={() => setMenu(false)}>
+                            <NavLink key={id} id={id} to={to} end={to === '/'} onClick={closeMobileMenuAfterNavigation}>
                                 <Icon size={17} />
                                 {label}
                                 {to === '/notifications' && unread > 0 && <span className="count">{unread}</span>}
@@ -297,7 +383,12 @@ export function App() {
                         ))}
                     </nav>
                     <span className="nav-label project-label">参加プロジェクト</span>
-                    <Link id={threadLink.id} className="mini-project" to={threadLink.to} onClick={() => setMenu(false)}>
+                    <Link
+                        id={threadLink.id}
+                        className="mini-project"
+                        to={threadLink.to}
+                        onClick={closeMobileMenuAfterNavigation}
+                    >
                         <span className="project-icon">T</span>
                         <span>
                             <strong>{threadLink.label}</strong>
@@ -307,21 +398,28 @@ export function App() {
                     </Link>
                 </div>
                 <div className="side-bottom">
-                    <Link id={settingsLink.id} to={settingsLink.to} onClick={() => setMenu(false)}>
+                    <Link id={settingsLink.id} to={settingsLink.to} onClick={closeMobileMenuAfterNavigation}>
                         <GitBranch size={16} /> {settingsLink.label}
                     </Link>
                 </div>
             </aside>
-            <div className="workspace">
+            <div className="workspace" inert={mobileDrawerOpen}>
                 <header className="topbar">
                     <div className="breadcrumb">
                         <button
-                            className="icon-button mobile-menu"
-                            aria-label="メニュー"
-                            aria-expanded={menu}
-                            onClick={() => setMenu((show) => !show)}
+                            type="button"
+                            className="icon-button"
+                            ref={menuToggleRef}
+                            aria-label={menuOpen ? 'サイドメニューを閉じる' : 'サイドメニューを開く'}
+                            aria-controls="workspace-sidebar"
+                            aria-expanded={menuOpen}
+                            onClick={toggleMenu}
                         >
-                            <Menu size={19} />
+                            {menuOpen ? (
+                                <PanelLeftClose size={19} aria-hidden="true" />
+                            ) : (
+                                <Menu size={19} aria-hidden="true" />
+                            )}
                         </button>
                         <span>ワークスペース</span>
                         <span aria-hidden="true">/</span>

@@ -3,7 +3,7 @@ export const chapters = ['開発チームへの参画', 'バックエンド保�
 export const team = {
     qa: { name: '佐藤 美咲', role: 'QA担当', initials: '佐' },
     pm: { name: '田中 健太', role: 'PM', initials: '田' },
-    director: { name: '鈴木 翔', role: 'ディレクター', initials: '鈴' },
+    director: { name: '鈴木 葵', role: 'ディレクター', initials: '鈴' },
     ops: { name: '山本 大輔', role: '運用担当', initials: '山' }
 };
 type Ticket = {
