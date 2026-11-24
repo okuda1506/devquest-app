@@ -18,7 +18,7 @@ export function Welcome({
 }) {
     const signup = page === 'signup';
     return (
-        <div className="welcome">
+        <div className={page || error ? 'welcome' : 'welcome welcome-cover'}>
             <header className="welcome-header">
                 <div className="welcome-container welcome-header-content">
                     <Link to="/" className="welcome-brand">
@@ -37,7 +37,7 @@ export function Welcome({
                     </nav>
                 </div>
             </header>
-            <main className="welcome-container" id="main-content">
+            <main className={page ? 'welcome-container' : undefined} id="main-content">
                 {page ? (
                     <section className="panel welcome-auth">
                         <h1>{signup ? '新規登録' : 'サインイン'}</h1>
@@ -67,7 +67,7 @@ export function Welcome({
                 ) : (
                     <>
                         {error && (
-                            <p className="feedback error welcome-error" role="alert">
+                            <p className="feedback error welcome-error welcome-container" role="alert">
                                 {error}
                             </p>
                         )}

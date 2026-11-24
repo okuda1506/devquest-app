@@ -1,10 +1,11 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, Lightbulb, MessagesSquare, RotateCcw } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ArrowRight, ChevronDown, Lightbulb, Pause, Play, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { chapters, tasks, team } from '../supabase/functions/quest/catalog';
 import questPreview from '../docs/screenshots/quest-preview.webp';
 import skillPreview from '../docs/screenshots/skill-profile.webp';
 import campaign from './assets/thread-campaign.webp';
+import campaignPortrait from './assets/thread-campaign-portrait.webp';
 import { DialogueLine, useDialoguePlayback } from './dialogue-line';
 import { MemberAvatar, type MemberId } from './team-members';
 
@@ -45,22 +46,55 @@ function TeamBriefing() {
     const { member, line } = briefing[index];
     const { typing, finish } = useDialoguePlayback(line, false);
     const last = index === briefing.length - 1;
+    const dialogue = useRef<HTMLDivElement>(null);
+    const [inView, setInView] = useState(false);
+    const [paused, setPaused] = useState(false);
+    const playing = inView && !paused;
+    const ended = last && !typing;
+
+    useEffect(() => {
+        let visible = true;
+        function update() {
+            setInView(visible && !document.hidden);
+        }
+        const observer =
+            'IntersectionObserver' in window
+                ? new IntersectionObserver(([entry]) => {
+                      visible = entry.isIntersecting;
+                      update();
+                  })
+                : undefined;
+        if (dialogue.current) observer?.observe(dialogue.current);
+        document.addEventListener('visibilitychange', update);
+        update();
+        return () => {
+            observer?.disconnect();
+            document.removeEventListener('visibilitychange', update);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!playing || typing || last) return;
+        // 文字送りが終わってから読み切る時間を取る
+        const timer = window.setTimeout(() => setIndex(index + 1), 2000 + line.length * 65);
+        return () => window.clearTimeout(timer);
+    }, [index, last, line, playing, typing]);
+
+    const controlLabel = ended ? '会話をもう一度再生' : paused ? '会話を再開' : '会話を一時停止';
+    const ControlIcon = ended ? RotateCcw : paused ? Play : Pause;
     return (
-        <section className="team-briefing" aria-labelledby="briefing-title" data-enter="">
-            <div className="briefing-bar">
-                <h2 id="briefing-title">
-                    <MessagesSquare size={16} aria-hidden="true" /> 初出勤プレビュー
-                </h2>
-                <span>開発チームの朝会</span>
-            </div>
+        <section className="team-briefing" aria-label="初出勤プレビュー">
             <div className="briefing-store">
-                <img src={campaign} alt="" width="1536" height="1024" fetchPriority="high" />
+                <picture>
+                    <source media="(max-aspect-ratio: 4/5)" srcSet={campaignPortrait} width="941" height="1672" />
+                    <img src={campaign} alt="" width="1536" height="1024" fetchPriority="high" />
+                </picture>
                 <span className="store-sign">
                     <small>担当するストア</small>
                     <b lang="en">THREAD.</b>
                 </span>
             </div>
-            <div className="briefing-dialogue" data-enter="">
+            <div className="briefing-dialogue" ref={dialogue} data-paused={!playing || undefined}>
                 <div className="briefing-speech" aria-hidden="true">
                     <MemberAvatar member={member} speaking={typing} expression="happy" />
                     <div>
@@ -71,22 +105,29 @@ function TeamBriefing() {
                         <DialogueLine key={member} id="briefing-line" line={line} typing={typing} onComplete={finish} />
                     </div>
                 </div>
-                <p className="dialogue-transcript" aria-live="polite" aria-atomic="true">
-                    {team[member].name}（{team[member].role}）「{line}」
-                </p>
-                <div className="briefing-controls">
-                    <span className="briefing-position" aria-label={`全${briefing.length}件の会話の${index + 1}件目`}>
-                        <b>{String(index + 1).padStart(2, '0')}</b> / {String(briefing.length).padStart(2, '0')}
-                    </span>
-                    <button type="button" onClick={() => setIndex(last ? 0 : index + 1)}>
-                        {last ? 'もう一度読む' : '次のセリフ'}
-                        {last ? (
-                            <RotateCcw size={15} aria-hidden="true" />
-                        ) : (
-                            <ArrowRight size={15} aria-hidden="true" />
-                        )}
-                    </button>
-                </div>
+                <ol className="dialogue-transcript" aria-label="朝会の会話">
+                    {briefing.map(({ member, line }) => (
+                        <li key={member}>
+                            {team[member].name}（{team[member].role}）「{line}」
+                        </li>
+                    ))}
+                </ol>
+                <button
+                    className="briefing-playback"
+                    type="button"
+                    aria-label={controlLabel}
+                    title={controlLabel}
+                    onClick={() => {
+                        if (ended) {
+                            setIndex(0);
+                            setPaused(false);
+                        } else {
+                            setPaused(!paused);
+                        }
+                    }}
+                >
+                    <ControlIcon size={17} aria-hidden="true" />
+                </button>
             </div>
         </section>
     );
@@ -116,121 +157,121 @@ export function WelcomeLanding() {
 
     return (
         <div ref={landing} className="welcome-landing">
-            <section className="welcome-hero" aria-labelledby="welcome-title">
-                <div className="welcome-intro">
-                    <p className="welcome-counts">
-                        <span>
-                            <b>{chapters.length}</b> チャプター
-                        </span>
-                        <span>
-                            <b>{tasks.length}</b> クエスト
-                        </span>
-                    </p>
+            <TeamBriefing />
+            <div className="welcome-container">
+                <section className="welcome-intro" aria-labelledby="welcome-title" data-enter="">
                     <h1 id="welcome-title">
                         <span>初仕事は</span>
                         <span>アパレルECの改修</span>
                     </h1>
-                    <p className="welcome-lead">
-                        「売り切れって商品を開くまで分からないの？」
-                        <wbr />
-                        お客様のひと言が最初のチケットです。アパレルストア「THREAD」の開発チームに入り、手元でECサイトを直しながらクエストを進めます。
-                    </p>
-                    <Link className="button primary welcome-cta" to="/signup">
-                        無料で始める <ArrowRight size={17} aria-hidden="true" />
-                    </Link>
-                    <p className="welcome-note">
-                        登録にはGoogleアカウントを使います。演習にはGitHubアカウントと本人所有の公開リポジトリが必要です。
-                    </p>
-                </div>
-                <TeamBriefing />
-            </section>
+                    <div>
+                        <p className="welcome-lead">
+                            「売り切れって商品を開くまで分からないの？」
+                            <wbr />
+                            お客様のひと言が最初のチケットです。アパレルストア「THREAD」の開発チームに入り、手元でECサイトを直しながらクエストを進めます。
+                        </p>
+                        <Link className="button primary welcome-cta" to="/signup">
+                            無料で始める <ArrowRight size={17} aria-hidden="true" />
+                        </Link>
+                        <p className="welcome-note">
+                            登録にはGoogleアカウントを使います。演習にはGitHubアカウントと本人所有の公開リポジトリが必要です。
+                        </p>
+                    </div>
+                </section>
 
-            <section className="welcome-section" aria-labelledby="welcome-flow">
-                <h2 id="welcome-flow" data-enter="">
-                    初出勤から最初のマージまで
-                </h2>
-                <div className="welcome-spread">
-                    <figure className="welcome-quest-sheet" data-enter="">
-                        <figcaption>
-                            <span className="ticket-number">{tasks[0].id}</span>
-                            <strong>{tasks[0].title}</strong>
-                        </figcaption>
-                        <img
-                            src={questPreview}
-                            width="1155"
-                            height="740"
-                            loading="lazy"
-                            alt="改修依頼、再現手順、作業ブランチ、段階別ヒントが並ぶ最初のチケット"
-                        />
-                        <details className="welcome-hint">
-                            <summary>
-                                <Lightbulb size={16} aria-hidden="true" />
-                                最初のチケットのヒント
-                                <ChevronDown size={16} aria-hidden="true" />
-                            </summary>
-                            <p>{tasks[0].hints[0]}</p>
-                        </details>
-                    </figure>
-                    <ol className="welcome-workflow">
-                        {workflow.map(([title, description]) => (
-                            <li key={title} data-enter="">
-                                <h3>{title}</h3>
-                                <p>{description}</p>
+                <section className="welcome-section" aria-labelledby="welcome-flow">
+                    <h2 id="welcome-flow" data-enter="">
+                        初出勤から最初のマージまで
+                    </h2>
+                    <div className="welcome-spread">
+                        <figure className="welcome-quest-sheet" data-enter="">
+                            <figcaption>
+                                <span className="ticket-number">{tasks[0].id}</span>
+                                <strong>{tasks[0].title}</strong>
+                            </figcaption>
+                            <img
+                                src={questPreview}
+                                width="1155"
+                                height="740"
+                                loading="lazy"
+                                alt="改修依頼、再現手順、作業ブランチ、段階別ヒントが並ぶ最初のチケット"
+                            />
+                            <details className="welcome-hint">
+                                <summary>
+                                    <Lightbulb size={16} aria-hidden="true" />
+                                    最初のチケットのヒント
+                                    <ChevronDown size={16} aria-hidden="true" />
+                                </summary>
+                                <p>{tasks[0].hints[0]}</p>
+                            </details>
+                        </figure>
+                        <ol className="welcome-workflow">
+                            {workflow.map(([title, description]) => (
+                                <li key={title} data-enter="">
+                                    <h3>{title}</h3>
+                                    <p>{description}</p>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                </section>
+
+                <section className="welcome-section welcome-curriculum" aria-labelledby="welcome-skills">
+                    <div data-enter="">
+                        <h2 id="welcome-skills">商品画面から本番運用まで</h2>
+                        <p>
+                            商品カードの小さな修正からスタート。章が進むにつれて、担当する範囲が売り場の裏側まで広がります。
+                        </p>
+                    </div>
+                    <ol className="welcome-chapters">
+                        {chapters.map((chapter, index) => (
+                            <li key={chapter} data-enter="">
+                                <span className="chapter-index" aria-hidden="true">
+                                    {String(index + 1).padStart(2, '0')}
+                                </span>
+                                <div>
+                                    <h3>{chapter}</h3>
+                                    <p>{chapterOutcomes[index]}</p>
+                                    {chapter === '新機能・本番障害対応' && (
+                                        <p className="upcoming-quests">
+                                            <strong>上級クエストに追加予定</strong>
+                                            レスポンス時間を計測してボトルネックを解消するパフォーマンス改善と、外部APIを組み込んだ新機能の開発に取り組めるようになります。
+                                        </p>
+                                    )}
+                                </div>
                             </li>
                         ))}
                     </ol>
-                </div>
-            </section>
+                </section>
 
-            <section className="welcome-section welcome-curriculum" aria-labelledby="welcome-skills">
-                <div data-enter="">
-                    <h2 id="welcome-skills">4章で身につく開発スキル</h2>
-                    <p>
-                        商品カードの小さな修正からスタート。章が進むにつれて、担当する範囲が売り場の裏側まで広がります。
-                    </p>
-                </div>
-                <ol className="welcome-chapters">
-                    {chapters.map((chapter, index) => (
-                        <li key={chapter} data-enter="">
-                            <span className="chapter-index" aria-hidden="true">
-                                {String(index + 1).padStart(2, '0')}
-                            </span>
-                            <div>
-                                <h3>{chapter}</h3>
-                                <p>{chapterOutcomes[index]}</p>
-                            </div>
-                        </li>
-                    ))}
-                </ol>
-            </section>
-
-            <section className="welcome-section welcome-skill-profile" aria-labelledby="welcome-record">
-                <div data-enter="">
-                    <h2 id="welcome-record">
-                        自分のPRが
-                        <br />
-                        スキルの記録になる
-                    </h2>
-                    <p>
-                        スキルプロフィールには、何を実装したかが課題ごとに残ります。採点ログとマージ済みのPRを開けば、どんなテストを通してコードをどう直したかまで振り返れます。
-                    </p>
-                    <Link className="sub-link" to="/signup">
-                        初出勤の準備を始める <ArrowRight size={16} aria-hidden="true" />
-                    </Link>
-                </div>
-                <figure className="welcome-proof" data-enter="">
-                    <figcaption>
-                        スキルプロフィール <span>学習記録の例</span>
-                    </figcaption>
-                    <img
-                        src={skillPreview}
-                        width="950"
-                        height="335"
-                        loading="lazy"
-                        alt="Reactの画面実装などのスキルに対応する採点ログとマージ済みPR"
-                    />
-                </figure>
-            </section>
+                <section className="welcome-section welcome-skill-profile" aria-labelledby="welcome-record">
+                    <div data-enter="">
+                        <h2 id="welcome-record">
+                            自分のPRが
+                            <br />
+                            スキルの記録になる
+                        </h2>
+                        <p>
+                            スキルプロフィールには、何を実装したかが課題ごとに残ります。採点ログとマージ済みのPRを開けば、どんなテストを通してコードをどう直したかまで振り返れます。
+                        </p>
+                        <Link className="sub-link" to="/signup">
+                            初出勤の準備を始める <ArrowRight size={16} aria-hidden="true" />
+                        </Link>
+                    </div>
+                    <figure className="welcome-proof" data-enter="">
+                        <figcaption>
+                            スキルプロフィール <span>学習記録の例</span>
+                        </figcaption>
+                        <img
+                            src={skillPreview}
+                            width="950"
+                            height="335"
+                            loading="lazy"
+                            alt="Reactの画面実装などのスキルに対応する採点ログとマージ済みPR"
+                        />
+                    </figure>
+                </section>
+            </div>
         </div>
     );
 }
