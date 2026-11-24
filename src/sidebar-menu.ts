@@ -1,4 +1,4 @@
-import { Bell, BookOpen, FileText, FolderKanban, LayoutDashboard, Milestone } from 'lucide-react';
+import { Bell, BookOpen, FileText, FolderKanban, LayoutDashboard, Milestone, UsersRound } from 'lucide-react';
 
 export const workspaceLinks = [
     {
@@ -14,6 +14,13 @@ export const workspaceLinks = [
         label: 'プロジェクト',
         icon: FolderKanban,
         line: '配属先で使う技術と、今取り組めるチャプターを確認できます。演習用のテンプレートもここから開けますよ。'
+    },
+    {
+        id: 'menu-members',
+        to: '/members',
+        label: 'メンバー一覧',
+        icon: UsersRound,
+        line: '顔と名前を覚えたいときはここを開いてください。メンバーの担当や仕事ぶり、その人から届いた依頼を見返せます。'
     },
     {
         id: 'menu-documents',

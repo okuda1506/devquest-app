@@ -48,6 +48,7 @@ import { Copy } from './copy';
 import { CriterionResults, ticketDetails } from './ticket-details';
 import { SkillProfile } from './skill-profile';
 import { ChapterCelebration } from './chapter-celebration';
+import { MemberProfile, RequesterLink, TeamMembers } from './team-members';
 
 function unlockedChapterFor(notice: Notice) {
     const task = getTask(notice.task_id);
@@ -202,7 +203,13 @@ export function App() {
     }, [theme]);
 
     const selected = workspaceLinks.find((item) => item.to === location.pathname);
-    const crumb = selected?.label ?? (location.pathname.startsWith('/tasks/') ? '課題詳細' : 'リポジトリ設定');
+    const crumb =
+        selected?.label ??
+        (location.pathname.startsWith('/members/')
+            ? 'プロフィール'
+            : location.pathname.startsWith('/tasks/')
+              ? '課題詳細'
+              : 'リポジトリ設定');
     const current = currentTask(home);
     const unlockedChapter = toast ? unlockedChapterFor(toast) : undefined;
     const login = () => void signIn().catch((cause: Error) => setError(cause.message));
@@ -400,6 +407,8 @@ export function App() {
                         />
                         <Route path="/project" element={<Project home={home} unlockedChapter={unlockedChapter} />} />
                         <Route path="/documents" element={<Documents />} />
+                        <Route path="/members" element={<TeamMembers />} />
+                        <Route path="/members/:id" element={<MemberProfile home={home} />} />
                         <Route
                             path="/tasks/:id"
                             element={<Ticket home={home} demoMode={demoMode} busy={busy} action={action} />}
@@ -922,26 +931,14 @@ function TicketContent({
             </Block>
             {status === 'completed' && details && (
                 <Block title="依頼者からの完了コメント">
-                    <div className="requester">
-                        <span>{task.requester.initials}</span>
-                        <p>
-                            <strong>{task.requester.name}</strong>
-                            <small>{task.requester.role}</small>
-                        </p>
-                    </div>
+                    <RequesterLink member={task.author} smiling />
                     <p>{details.reply}</p>
                 </Block>
             )}
             <div className="details-grid">
                 <div className="stack">
                     <Block title="改修依頼">
-                        <div className="requester">
-                            <span>{task.requester.initials}</span>
-                            <p>
-                                <strong>{task.requester.name}</strong>
-                                <small>{task.requester.role}</small>
-                            </p>
-                        </div>
+                        <RequesterLink member={task.author} />
                         <p>{task.description}</p>
                         {details && (
                             <>

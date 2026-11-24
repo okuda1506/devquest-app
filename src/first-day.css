@@ -119,21 +119,46 @@ body:has(.first-day[open]) {
     padding: 22px;
 }
 .speaker {
-    gap: 8px;
+    gap: 12px;
     font-size: 13px;
     margin-bottom: 12px;
 }
 .speaker small {
     color: var(--muted);
 }
-.speaker-avatar {
-    width: 26px;
-    height: 26px;
+.speaker-portrait {
+    flex: none;
+    overflow: hidden;
+    width: 72px;
+    border-radius: 16px;
+    box-shadow: 0 2px 0 var(--line);
+}
+.speaker-caption {
     display: grid;
-    place-items: center;
+    gap: 2px;
+}
+.speaker-caption strong {
+    font-size: 17px;
+}
+.speaker-ensemble {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    padding-left: 4px;
+}
+.speaker-ensemble .member-avatar {
+    width: 30px;
     border-radius: 50%;
-    background: var(--blue-faint);
-    color: var(--accent);
+    margin-left: -4px;
+    outline: 2px solid var(--panel);
+}
+.scene-arrival .speaker-portrait,
+.scene-request .speaker-portrait {
+    width: 82px;
+}
+.scene-menu .speaker-portrait {
+    width: 44px;
+    border-radius: 11px;
 }
 .scene-dialogue h2 {
     font-size: clamp(18px, 3vw, 24px);
@@ -367,6 +392,19 @@ body:has(.first-day[open]) {
     }
 }
 @media (prefers-reduced-motion: no-preference) {
+    .speaker-portrait {
+        animation: speaker-arrives 310ms cubic-bezier(0.2, 0.8, 0.25, 1) both;
+    }
+    @keyframes speaker-arrives {
+        from {
+            opacity: 0;
+            transform: translateY(5px) scale(0.93);
+        }
+        to {
+            opacity: 1;
+            transform: none;
+        }
+    }
     .scene-chapter-complete[open] {
         animation: chapter-dialog-arrive 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
     }
@@ -525,8 +563,25 @@ body:has(.first-day[open]) {
 }
 .scene-dialogue h2 {
     text-wrap: balance;
+    word-break: auto-phrase;
 }
 @media (max-width: 359px) {
+    .speaker-ensemble .member-avatar {
+        width: 23px;
+    }
+    .speaker-caption strong {
+        white-space: nowrap;
+    }
+    .scene-arrival .speaker-portrait {
+        width: 64px;
+    }
+    .scene-arrival .pass-display {
+        padding: 9px;
+    }
+    .scene-request {
+        top: 16px;
+        max-height: calc(100dvh - 32px);
+    }
     .scene-menu .scene-label > svg:first-child {
         display: none;
     }

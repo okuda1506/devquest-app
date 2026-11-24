@@ -616,21 +616,16 @@ progress::-moz-progress-bar {
 }
 .requester {
     display: flex;
+    width: fit-content;
     align-items: center;
     gap: 9px;
     margin-bottom: 12px;
 }
-.requester > span {
-    display: grid;
-    place-items: center;
-    width: 31px;
-    height: 31px;
-    background: var(--blue-faint);
-    color: var(--accent);
+.requester .member-avatar {
+    width: 42px;
     border-radius: 50%;
 }
-.requester p {
-    margin: 0;
+.requester > span {
     line-height: 1.4;
 }
 .requester small,

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { ArrowRight, CircleCheck, LockKeyholeOpen } from 'lucide-react';
-import { chapters, team } from '../supabase/functions/quest/catalog';
-import { DialogueLine } from './dialogue-line';
+import { chapters } from '../supabase/functions/quest/catalog';
+import { DialogueLine, Speaker, useDialoguePlayback } from './dialogue-line';
 import type { chapterCompletion } from './model';
 import './first-day.css';
 
@@ -40,6 +40,7 @@ export function ChapterCelebration({
         : (reflections[chapter] ??
           '公開されている依頼を完了しました。確認したことや判断した理由を、次の改修でも活かしてください。');
 
+    const { typing, finish } = useDialoguePlayback(line, instant);
     useLayoutEffect(() => {
         const dialog = dialogRef.current!;
         dialog.showModal();
@@ -70,15 +71,16 @@ export function ChapterCelebration({
                 </button>
             </div>
             <div className="scene-body scene-dialogue" key={String(briefing)}>
-                <div className="speaker">
-                    <span className="speaker-avatar">{team.pm.initials}</span>
-                    <strong>{team.pm.name}</strong>
-                    <small>{team.pm.role}</small>
-                </div>
-                <h2 id="chapter-complete-title" ref={headingRef} tabIndex={-1} aria-describedby="chapter-complete-line">
+                <Speaker member="pm" typing={typing} smiling />
+                <h2
+                    id="chapter-complete-title"
+                    ref={headingRef}
+                    tabIndex={-1}
+                    aria-describedby="dialogue-speaker chapter-complete-line"
+                >
                     {title}
                 </h2>
-                <DialogueLine id="chapter-complete-line" line={line} instant={instant} />
+                <DialogueLine id="chapter-complete-line" line={line} typing={typing} onComplete={finish} />
                 {briefing && nextTask && (
                     <div className="chapter-briefing-task">
                         <LockKeyholeOpen size={18} aria-hidden="true" />
@@ -94,8 +96,17 @@ export function ChapterCelebration({
                     全文表示
                 </label>
                 <div className="scene-navigation">
-                    <button className="button primary" onClick={briefing ? onContinue : () => setBriefing(true)}>
-                        {briefing ? (nextTask ? '次の依頼を開く' : 'スキルプロフィールを見る') : '次へ'}{' '}
+                    <button
+                        className="button primary"
+                        onClick={typing ? finish : briefing ? onContinue : () => setBriefing(true)}
+                    >
+                        {typing
+                            ? '全文を読む'
+                            : briefing
+                              ? nextTask
+                                  ? '次の依頼を開く'
+                                  : 'スキルプロフィールを見る'
+                              : '次へ'}{' '}
                         <ArrowRight size={16} aria-hidden="true" />
                     </button>
                 </div>

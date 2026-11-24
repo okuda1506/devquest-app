@@ -9,47 +9,52 @@ import {
     GitBranch,
     Ticket
 } from 'lucide-react';
-import { tasks, team, template } from '../supabase/functions/quest/catalog';
+import { tasks, template } from '../supabase/functions/quest/catalog';
 import { menuTour } from './sidebar-menu';
 import { SetupHelp } from './setup-help';
-import { DialogueLine } from './dialogue-line';
+import { DialogueLine, Speaker, useDialoguePlayback } from './dialogue-line';
 import './first-day.css';
 
 export const firstAssignment = tasks[0];
 const scenes = {
     arrival: {
         step: 1,
+        speaker: 'pm',
         label: 'チームに着任',
         title: 'THREAD 開発チームへ、ようこそ。',
         next: 'チームに合流する',
-        line: '田中です。今日から一緒に、アパレルストア「THREAD」を育てていきましょう。まずは、担当してもらうプロジェクトを紹介します。'
+        line: 'PMの田中です。はい、これがあなたの入館証。今日から一緒にアパレルストア「THREAD」を育てていきましょう。鈴木さん、お店の紹介をお願い！'
     },
     project: {
         step: 2,
+        speaker: 'director',
         label: '配属先の確認',
         title: 'ここが担当プロジェクトです。',
         next: 'サイドメニューを見る',
-        line: 'THREAD は、すでにお客様が使っているお店です。このカードから、システムの概要やチームの課題をいつでも確認できます。'
+        line: 'ディレクターの鈴木です。ここが私たちのお店、THREAD。お客様が服を探すときに迷わないよう、画面を一緒に磨いていきましょう。このカードからお店の仕組みを確認できます。'
     },
     menu: {
         step: 3,
+        speaker: 'pm',
         label: 'サイドメニュー'
     },
     setup: {
         step: 4,
+        speaker: 'ops',
         label: '環境構築',
         title: '開発環境を準備しましょう。',
         next: 'セットアップ完了',
-        line: 'THREAD の README に沿って開発環境を起動してください。起動済みの方は、両方の画面を開けることを確認してください。'
+        line: '運用の山本です。手元でお店を動かしてみましょう。THREAD の README に沿って起動したら、EC サイトと店舗管理画面が両方開けるか確認してください。'
     },
     request: {
         step: 5,
+        speaker: firstAssignment.author,
         label: '新しい改修依頼',
         title: firstAssignment.title,
         next: '依頼を開く',
-        line: firstAssignment.description
+        line: 'お疲れさまです。最初の依頼が届きました。' + firstAssignment.description
     }
-};
+} as const;
 type Scene = keyof typeof scenes;
 const sceneCount = Object.keys(scenes).length;
 const setupReadme = 'https://github.com/' + template + '#初回セットアップ';
@@ -98,7 +103,7 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                   line: menuTour[menuIndex].line
               }
             : scenes[scene];
-    const speaker = scene === 'request' ? firstAssignment.requester : team.pm;
+    const { typing, finish } = useDialoguePlayback(line, instantDialogue);
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current!;
@@ -193,26 +198,33 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
             <div className="scene-body" key={menuItem?.id ?? scene}>
                 {scene === 'arrival' && <StaffPass />}
                 <div className="scene-dialogue">
-                    <div className="speaker">
-                        <span className="speaker-avatar">{speaker.initials}</span>
-                        <strong>{speaker.name}</strong>
-                        <small>{speaker.role}</small>
+                    <Speaker
+                        member={scenes[scene].speaker}
+                        typing={typing}
+                        smiling={scene === 'arrival'}
+                        showTeam={scene === 'arrival'}
+                    >
                         {menuItem && (
                             <span className="menu-tour-count">
                                 {menuIndex + 1} / {menuTour.length}
                             </span>
                         )}
-                    </div>
+                    </Speaker>
                     {scene === 'request' && (
                         <span className="scene-ticket mono">
                             <Ticket size={14} aria-hidden="true" />
                             {firstAssignment.id}
                         </span>
                     )}
-                    <h2 id="first-day-title" ref={titleRef} tabIndex={-1} aria-describedby="first-day-line">
+                    <h2
+                        id="first-day-title"
+                        ref={titleRef}
+                        tabIndex={-1}
+                        aria-describedby="dialogue-speaker first-day-line"
+                    >
                         {title}
                     </h2>
-                    <DialogueLine id="first-day-line" line={line} instant={instantDialogue} />
+                    <DialogueLine id="first-day-line" line={line} typing={typing} onComplete={finish} />
                     {scene === 'setup' && (
                         <div className="scene-setup-checklist">
                             <a className="button" href={setupReadme} target="_blank" rel="noopener noreferrer">
@@ -274,10 +286,10 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                     )}
                     <button
                         className="button primary"
-                        onClick={advance}
-                        disabled={scene === 'setup' && openedPages.length !== setupChecks.length}
+                        onClick={typing ? finish : advance}
+                        disabled={!typing && scene === 'setup' && openedPages.length !== setupChecks.length}
                     >
-                        {next} <ArrowRight size={16} />
+                        {typing ? '全文を読む' : next} <ArrowRight size={16} />
                     </button>
                 </div>
             </div>
