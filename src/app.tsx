@@ -341,8 +341,20 @@ export function App() {
             >
                 本文へ移動
             </a>
-            {mobileDrawerOpen && <div className="sidebar-backdrop" aria-hidden="true" onClick={closeMenu} />}
-            <aside id="workspace-sidebar" className="sidebar" ref={sidebarRef} aria-label="サイドバー">
+            {isMobile && (
+                <div
+                    className={'sidebar-backdrop' + (mobileDrawerOpen ? ' visible' : '')}
+                    aria-hidden="true"
+                    onClick={closeMenu}
+                />
+            )}
+            <aside
+                id="workspace-sidebar"
+                className="sidebar"
+                ref={sidebarRef}
+                aria-label="サイドバー"
+                inert={!menuOpen && !touring}
+            >
                 <div className="sidebar-header">
                     <Link className="brand" to="/" onClick={closeMobileMenuAfterNavigation}>
                         <span className="brand-icon">
