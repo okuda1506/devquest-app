@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { chapterCompletion, empty, type Home, type Progress } from './model';
 import { learnerSkills } from './skills';
+import { tasks } from '../supabase/functions/quest/catalog';
 
 const timestamp = '2026-11-24T01:00:00Z';
 const sha = 'a'.repeat(40);
@@ -16,24 +17,27 @@ function progress(task_id: string, status: Progress['status']): Progress {
     };
 }
 
-test('公開課題を初めて完了したときだけ次章の依頼を案内する', () => {
-    const before = {
-        ...empty,
-        progress: [progress('DEV-101', 'completed'), progress('DEV-102', 'completed'), progress('DEV-103', 'passed')]
-    };
-    const after = {
-        ...before,
-        progress: [...before.progress.slice(0, 2), progress('DEV-103', 'completed'), progress('DEV-104', 'not_started')]
-    };
-    expect(chapterCompletion(before, before, 'DEV-103')).toBeUndefined();
-    expect(chapterCompletion(before, after, 'DEV-103')).toMatchObject({
+test('10件目の合格とマージを区別し、完了したときだけ次章を解放する', () => {
+    const first = tasks.slice(0, 9).map((task) => progress(task.id, 'completed'));
+    const last = tasks[9].id;
+    const next = tasks[10].id;
+    const before = { ...empty, progress: [...first, progress(last, 'passed')] };
+    const after = { ...empty, progress: [...first, progress(last, 'completed'), progress(next, 'not_started')] };
+    expect(chapterCompletion(before, before, last)).toBeUndefined();
+    expect(chapterCompletion(before, after, last)).toMatchObject({
         chapter: 0,
-        hasPlanned: true,
-        nextTask: { id: 'DEV-104' }
+        hasPlanned: false,
+        nextTask: { id: next }
     });
-    expect(chapterCompletion(after, after, 'DEV-103')).toBeUndefined();
-    const end = { ...after, progress: [...after.progress.slice(0, 3), progress('DEV-104', 'completed')] };
-    expect(chapterCompletion(after, end, 'DEV-104')).toEqual({ chapter: 1, hasPlanned: true, nextTask: undefined });
+    expect(chapterCompletion(after, after, last)).toBeUndefined();
+    const completed = { ...empty, progress: tasks.map((task) => progress(task.id, 'completed')) };
+    const final = tasks.at(-1)!.id;
+    const beforeFinal = { ...completed, progress: completed.progress.slice(0, -1).concat(progress(final, 'passed')) };
+    expect(chapterCompletion(beforeFinal, completed, final)).toEqual({
+        chapter: 3,
+        hasPlanned: false,
+        nextTask: undefined
+    });
 });
 
 test('マージしたコミットと同じ採点を証拠にし、前の提出も成長の記録に残す', () => {

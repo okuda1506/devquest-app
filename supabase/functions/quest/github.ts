@@ -49,7 +49,9 @@ export type Repo = {
 };
 const shaPattern = /^[0-9a-f]{40}$/;
 const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/;
+export const quest40Baseline = '664ab6ef8aafcb3d7e512aac0b319ed60b18f7dd'; // thread-quests-v2
 export const templateBaselines = [
+    quest40Baseline,
     'c39fe6597bf0929fa651596a53f3db636d71a852',
     '8308c7e7f65f64e90f265cb0e40e42157ed1b752',
     '7d4f1f33a70257bf4bf6b28e0947a6180840a81b',
@@ -141,7 +143,7 @@ export async function verifyProtection(github: Github, canonical: readonly strin
     if (candidate.includes(JSON.stringify(workflow))) {
         // 保護ファイル一式が同じ版と完全に一致する場合だけ、既存・移行後の提出を受け入れる。
         for (const commit of new Set(canonical)) {
-            if (candidate === (await fingerprint(github, template, commit))) return;
+            if (candidate === (await fingerprint(github, template, commit))) return commit;
         }
     }
     throw new QuestError('採点対象外の保護ファイルに変更があります。元の状態に戻してください。');
@@ -269,7 +271,12 @@ export async function inspectGrade(
     if (!merged && !(await ancestor(github, repo.full_name, main, sha))) {
         throw new QuestError('最新の main を作業ブランチに取り込んでから push してください。');
     }
-    await verifyProtection(github, canonical, repo.full_name, sha);
+    const baseline = await verifyProtection(github, canonical, repo.full_name, sha);
+    if (Number(task.id.slice(4)) >= 105 && baseline !== quest40Baseline) {
+        throw new QuestError(
+            '追加課題を採点するには、THREAD README の手順で採点ファイルを thread-quests-v2 に更新してください。'
+        );
+    }
     const filters = new URLSearchParams({ branch: task.branch, event: 'push', head_sha: sha, per_page: '10' });
     const { workflow_runs: runs } = await github<{ workflow_runs: Run[] }>(
         root + '/actions/workflows/grade.yml/runs?' + filters

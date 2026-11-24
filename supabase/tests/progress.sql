@@ -39,6 +39,31 @@ begin
         then raise exception '次の課題が解放されていない'; end if;
 end;
 $$;
+
+do $$
+declare
+    learner constant uuid := '00000000-0000-0000-0000-000000000001';
+    task record;
+    state text;
+begin
+    if (select count(*) from public.quest_order) <> 40 then raise exception '課題数が40件ではない'; end if;
+    for task in select task_id, position, lag(task_id) over w as prior, lead(task_id) over w as following
+                from public.quest_order window w as (order by position)
+    loop
+        if task.position = 1 then continue; end if;
+        select public.record_grade(
+            learner, 71, task.task_id, task.prior,
+            case when task.task_id = 'DEV-104' then null else task.following end,
+            repeat('a', 40), task.position + 2, 1, 'test', 'passed', task.position, repeat('c', 40), now()
+        ) into state;
+        if state <> 'completed' then raise exception '完了に失敗 %', task.task_id; end if;
+    end loop;
+    if (select count(*) from public.progress where user_id = learner and status = 'completed') <> 40
+        then raise exception '全40件が順に完了していない'; end if;
+    if (select count(*) from public.notifications where user_id = learner and kind = 'assigned') <> 40
+        then raise exception '40件の依頼が一度ずつ配布されていない'; end if;
+end;
+$$;
 reset role;
 
 set role authenticated;

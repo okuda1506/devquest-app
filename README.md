@@ -4,7 +4,7 @@ THREAD の開発チームに途中参画し、改修依頼を受け取って自�
 
 - DevQuest 本体は React、TypeScript、Vite と Supabase で構成します。
 - 演習コードと採点ワークフローは [THREAD テンプレート](https://github.com/okuda1506/devquest-fashion-template) にあります。商品のデータは演習者の PostgreSQL に保存され、DevQuest の DB とは独立します。
-- DEV-101〜104 を公開対象とし、DEV-105〜120 は追加予定です。各チャプターに5件の課題を用意しています。学習者による採点テストの追加は不要です。
+- 各チャプター10件ずつ、計40件の課題（DEV-101〜140）を自動採点します。課題は DevQuest に表示される順に進めます。
 
 ## クエスト画面
 
@@ -60,10 +60,10 @@ GitHub でログインしたブラウザでは、同じ URL を開き直して�
 
 ## 採点・運用
 
-- ワークフローは `task/DEV-101` から `task/DEV-104` の push で課題テストを実行します。既存テストに加え、解放済みの過去課題のテストも実行します。採点専用ファイルの変更は GitHub Actions と Edge Function の両方で照合します。
+- ワークフローは `task/DEV-101` から `task/DEV-140` の push で課題テストを実行します。既存テストに加え、解放済みの過去課題のテストも実行します。採点専用ファイルの変更は GitHub Actions と Edge Function の両方で照合します。
 - Edge Function はログイン中の GitHub ユーザー ID、リポジトリ ID、指定作業ブランチの先端 SHA、採点ワークフローの SHA と結論を照合します。合格と PR マージを分け、main に到達したマージを確認して次を解放します。ブラウザから進捗・採点・通知を書き換える権限は付与しません。
 - 学習者のリポジトリは公開されるため、業務コード、実際の顧客データ、秘密情報を置かないでください。採点は研修用途の公開テストで、機密の試験問題や完全な不正防止が必要な場合は、採点を独立したサービスに移してください。
 - Edge Function は THREAD の分離前、`thread-split-v1`、`thread-checkout-v1` の各版の保護ファイル一式を認識します。分離版から演習中のリポジトリも、その版のまま提出できます。[購入手続きを取り込む場合の移行手順](https://github.com/okuda1506/devquest-fashion-template#旧版から演習を進めている場合)
 - 採点基準を更新するときは、Actions の基準タグと Edge Function の承認済みコミットを計画的に更新します。追加の基準は Edge Function の `THREAD_TEMPLATE_SHA` に公開済みの40桁コミット SHA をコンマ区切りで指定できます。課題追加時はカタログ・DB の解放順・ワークフロー・回帰テストを揃えます。
-- 条件別の採点を公開する際は、このリポジトリの `quest` Edge Function を先にデプロイし、`thread-criteria-v1` を承認済みの状態にしてから、THREAD の `criterion-grading` を `main` に反映します。以前の採点基準を使う演習リポジトリでも従来どおり合否を確認でき、条件別の記録がない実行は「結果なし」と表示します。
+- 40課題を既存環境に反映するときは、THREAD の `thread-quests-v2` タグを公開し、DevQuest の `supabase db push` と `supabase functions deploy quest` を順に実行してからフロントエンドを公開します。DEV-104 の完了済み記録から次の課題を自動で配布します。演習者は DEV-104 の次へ進む前に [THREAD の採点の更新手順](https://github.com/okuda1506/devquest-fashion-template#採点の更新すでに演習中の場合)を実行してください。
 - Supabase の無料プロジェクトが一時停止した場合は、管理画面で再開して Edge Function と DB の疎通を確認します。個人データを含むため、バックアップはアクセスを制限した場所に保管し、復元後にリポジトリ ID、完了 SHA、通知件数を確認します。採点の再確認は同じ提出・通知を重複登録しません。

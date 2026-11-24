@@ -1,4 +1,4 @@
-import { getTask } from '../supabase/functions/quest/catalog';
+import { tasks } from '../supabase/functions/quest/catalog';
 import { statusFor, submissionLog, type Home, type Status } from './model';
 
 const skillDefinitions = [
@@ -18,43 +18,46 @@ export const skillStatus: Record<Status, string> = {
 };
 
 export function learnerSkills(home: Home) {
-    return skillDefinitions.flatMap((definition) => {
-        const task = getTask(definition.taskId);
-        if (!task?.available) return [];
-        const status = statusFor(home, task);
-        const progress = home.progress.find((entry) => entry.task_id === task.id);
-        const submissions = home.submissions.filter((entry) => entry.task_id === task.id);
-        const verified = status === 'passed' || status === 'completed';
-        const passed = submissions.find(
-            (entry) => verified && entry.result === 'passed' && entry.head_sha === progress?.head_sha
-        );
-        const firstSubmission = submissions.at(-1);
-        const firstPass = submissions.filter((entry) => entry.result === 'passed').at(-1);
-        const pullUrl =
-            status === 'completed' && progress?.pull_number && home.profile.repo_name
-                ? `https://github.com/${home.profile.repo_name}/pull/${progress.pull_number}`
-                : null;
-        const milestones = [];
-        if (firstSubmission)
-            milestones.push({
-                label: '初回提出',
-                date: firstSubmission.created_at,
-                url: submissionLog(firstSubmission)
-            });
-        if (firstPass)
-            milestones.push({ label: '初回の採点合格', date: firstPass.created_at, url: submissionLog(firstPass) });
-        if (status === 'completed' && progress?.completed_at) {
-            milestones.push({ label: 'PR のマージを確認', date: progress.completed_at, url: pullUrl });
-        }
-        return [
-            {
+    return tasks
+        .filter((task) => task.available)
+        .map((task) => {
+            const definition = skillDefinitions.find((skill) => skill.taskId === task.id) ?? {
+                taskId: task.id,
+                area: task.tags.join(' · '),
+                ability: task.title
+            };
+            const status = statusFor(home, task);
+            const progress = home.progress.find((entry) => entry.task_id === task.id);
+            const submissions = home.submissions.filter((entry) => entry.task_id === task.id);
+            const verified = status === 'passed' || status === 'completed';
+            const passed = submissions.find(
+                (entry) => verified && entry.result === 'passed' && entry.head_sha === progress?.head_sha
+            );
+            const firstSubmission = submissions.at(-1);
+            const firstPass = submissions.filter((entry) => entry.result === 'passed').at(-1);
+            const pullUrl =
+                status === 'completed' && progress?.pull_number && home.profile.repo_name
+                    ? `https://github.com/${home.profile.repo_name}/pull/${progress.pull_number}`
+                    : null;
+            const milestones = [];
+            if (firstSubmission)
+                milestones.push({
+                    label: '初回提出',
+                    date: firstSubmission.created_at,
+                    url: submissionLog(firstSubmission)
+                });
+            if (firstPass)
+                milestones.push({ label: '初回の採点合格', date: firstPass.created_at, url: submissionLog(firstPass) });
+            if (status === 'completed' && progress?.completed_at) {
+                milestones.push({ label: 'PR のマージを確認', date: progress.completed_at, url: pullUrl });
+            }
+            return {
                 ...definition,
                 chapter: task.chapter,
                 status,
                 pullUrl,
                 gradeUrl: passed ? submissionLog(passed) : null,
                 milestones
-            }
-        ];
-    });
+            };
+        });
 }

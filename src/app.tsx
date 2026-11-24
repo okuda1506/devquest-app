@@ -694,7 +694,7 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
     const unlockedThrough = Math.max(0, ...unlockedTasks.map((task) => task.chapter));
     const nextChapter = unlockedThrough + 1;
     const remaining = chapters.length - nextChapter - 1;
-    const nextIsPublished = tasks.some((task) => task.chapter === nextChapter && task.available);
+
     return (
         <section className="chapter-roadmap" aria-labelledby="chapter-roadmap-title">
             <h2 id="chapter-roadmap-title">チャプター進捗</h2>
@@ -702,8 +702,8 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
                 const visibleTasks = unlockedTasks.filter((task) => task.chapter === index);
                 const publishedTasks = tasks.filter((task) => task.chapter === index && task.available);
                 const plannedCount = tasks.filter((task) => task.chapter === index && !task.available).length;
-                const complete =
-                    publishedTasks.length > 0 && publishedTasks.every((task) => statusFor(home, task) === 'completed');
+                const completed = visibleTasks.filter((task) => statusFor(home, task) === 'completed').length;
+                const complete = publishedTasks.length > 0 && completed === publishedTasks.length;
                 return (
                     <section
                         className={'panel chapter' + (index === unlockedChapter ? ' chapter-unlocked' : '')}
@@ -719,7 +719,7 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
                                         {plannedCount ? '公開分完了' : '完了'}
                                     </>
                                 ) : visibleTasks.length ? (
-                                    '進行中'
+                                    `${completed} / ${publishedTasks.length} 件完了`
                                 ) : (
                                     '準備中'
                                 )}
@@ -756,7 +756,7 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
                     <LockKeyhole size={18} aria-hidden="true" />
                     <div>
                         <strong>次のチャプター</strong>
-                        <p>{nextIsPublished ? '現在のチャプターを完了すると解放' : '公開後に解放'}</p>
+                        <p>現在のチャプターを完了すると解放</p>
                     </div>
                 </div>
             )}

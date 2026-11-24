@@ -3,6 +3,7 @@ import { getTask, tasks, template, branchCommands } from './catalog';
 import {
     GithubError,
     inspectGrade,
+    quest40Baseline,
     readCriteria,
     repoName,
     verifyProtection,
@@ -66,7 +67,7 @@ function github({
                               number: 3,
                               merged_at: '2026-11-23',
                               merge_commit_sha: merge,
-                              head: { ref: task.branch, sha, repo: { id: repo.id }, user: { id: repo.owner.id } },
+                              head: { ref: branch, sha, repo: { id: repo.id }, user: { id: repo.owner.id } },
                               base: { ref: base, repo: { id: repo.id } }
                           }
                       ]
@@ -102,16 +103,21 @@ function github({
 }
 
 describe('演習の判定', () => {
-    test('各チャプターに5課題があり、指定ブランチと公開範囲が一致する', () => {
-        expect(tasks).toHaveLength(20);
+    test('各チャプターに10課題があり、すべての課題を順番に解放する', () => {
+        expect(tasks).toHaveLength(40);
+        expect(new Set(tasks.map((item) => item.id)).size).toBe(40);
         expect([0, 1, 2, 3].map((chapter) => tasks.filter((task) => task.chapter === chapter).length)).toEqual([
-            5, 5, 5, 5
+            10, 10, 10, 10
         ]);
-        expect(tasks.filter((item) => item.available).map((item) => item.id)).toEqual([
+        expect(tasks.every((item, index) => item.available && item.previous === (tasks[index - 1]?.id ?? null))).toBe(
+            true
+        );
+        expect(tasks.slice(0, 5).map((item) => item.id)).toEqual([
             'DEV-101',
             'DEV-102',
             'DEV-103',
-            'DEV-104'
+            'DEV-104',
+            'DEV-113'
         ]);
         expect(tasks.every((item) => item.branch === 'task/' + item.id)).toBe(true);
         expect(branchCommands(getTask('DEV-102')!)).toContain('git switch -c task/DEV-102');
@@ -144,6 +150,17 @@ describe('演習の判定', () => {
         expect(
             await inspectGrade(github({ conclusion: 'failure', merged: true }), canonical, repo, task, null)
         ).toMatchObject({ result: 'failed', merge: null });
+    });
+
+    test('追加課題の採点には40課題版のワークフローが必要', async () => {
+        const added = getTask('DEV-113')!;
+        const repoWithMerge = github({ branch: added.branch, merged: true });
+        await expect(inspectGrade(repoWithMerge, canonical, repo, added, merge)).rejects.toThrow(/thread-quests-v2/);
+        await expect(inspectGrade(repoWithMerge, [quest40Baseline], repo, added, merge)).resolves.toMatchObject({
+            result: 'passed',
+            merge,
+            pull: 3
+        });
     });
 
     test('異なるブランチや過去のコミットの結果を合格にしない', async () => {
@@ -182,10 +199,10 @@ test('分離前と分離後の採点基準を認め、異なる版を混ぜた�
             ) as T;
         };
     const baselines = [...canonical, 'f'.repeat(40)];
-    await expect(
-        verifyProtection(fixture([workflow, adminConfig]), baselines, repo.full_name, sha)
-    ).resolves.toBeUndefined();
-    await expect(verifyProtection(fixture([legacy]), baselines, repo.full_name, sha)).resolves.toBeUndefined();
+    await expect(verifyProtection(fixture([workflow, adminConfig]), baselines, repo.full_name, sha)).resolves.toBe(
+        baselines[0]
+    );
+    await expect(verifyProtection(fixture([legacy]), baselines, repo.full_name, sha)).resolves.toBe(baselines[1]);
     const changedConfig = { ...adminConfig, sha: changed };
     await expect(verifyProtection(fixture([workflow, changedConfig]), baselines, repo.full_name, sha)).rejects.toThrow(
         /保護ファイル/
