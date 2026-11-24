@@ -8,7 +8,6 @@ import {
     Check,
     Circle,
     CircleCheck,
-    Clipboard,
     Code2,
     FileText,
     GitBranch,
@@ -27,6 +26,7 @@ import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } fro
 import { branchCommands, chapters, getTask, tasks, template, type Task } from '../supabase/functions/quest/catalog';
 import { callQuest, finishSignIn, sessionExpiration, signIn, supabase } from './client';
 import {
+    chapterCompletion,
     currentTask,
     dateLabel,
     demo,
@@ -34,6 +34,7 @@ import {
     noticeText,
     statusFor,
     statusLabels,
+    submissionLog,
     type Home,
     type Notice,
     type Status
@@ -43,7 +44,10 @@ import './styles.css';
 import { FirstDay, firstAssignment } from './first-day';
 import { settingsLink, threadLink, workspaceLinks } from './sidebar-menu';
 import { Documents } from './documents';
+import { Copy } from './copy';
 import { CriterionResults, ticketDetails } from './ticket-details';
+import { SkillProfile } from './skill-profile';
+import { ChapterCelebration } from './chapter-celebration';
 
 function unlockedChapterFor(notice: Notice) {
     const task = getTask(notice.task_id);
@@ -58,6 +62,8 @@ export function App() {
     const [userId, setUserId] = useState<string | null>(null);
     const [loadingAuth, setLoadingAuth] = useState(!!supabase);
     const [data, setData] = useState<Home>(empty);
+    const latestHome = useRef<Home>(empty);
+    const [celebration, setCelebration] = useState<ReturnType<typeof chapterCompletion>>();
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [message, setMessage] = useState('');
@@ -85,7 +91,9 @@ export function App() {
         function updateUser(id: string | null) {
             if (id !== activeUser.current) {
                 activeUser.current = id;
+                latestHome.current = empty;
                 setData(empty);
+                setCelebration(undefined);
                 setToast(null);
                 queuedToast.current = null;
                 setBusy(false);
@@ -137,6 +145,11 @@ export function App() {
         try {
             const next = await callQuest<Home>(input);
             if (requester !== activeUser.current) return false;
+            if (input.action === 'grade' && typeof input.taskId === 'string') {
+                const completed = chapterCompletion(latestHome.current, next, input.taskId);
+                if (completed) setCelebration(completed);
+            }
+            latestHome.current = next;
             setData(next);
             if (next.gradeMessage) setMessage(next.gradeMessage);
             const pending = next.notifications.filter(
@@ -201,6 +214,30 @@ export function App() {
     function dismissToast() {
         setToast(queuedToast.current);
         queuedToast.current = null;
+    }
+
+    function closeChapter() {
+        setCelebration(undefined);
+        requestAnimationFrame(() => {
+            document.getElementById('main-content')?.focus({ preventScroll: true });
+        });
+    }
+
+    function continueAfterChapter() {
+        const nextTask = celebration?.nextTask;
+        closeChapter();
+        if (nextTask) {
+            const nextNotice = home.notifications.find(
+                (notice) => notice.kind === 'assigned' && notice.task_id === nextTask.id && !notice.read_at
+            );
+            setToast(null);
+            queuedToast.current = null;
+            if (nextNotice) void action({ action: 'read', notificationId: nextNotice.id });
+        }
+        navigate(nextTask ? '/tasks/' + nextTask.id : '/skills');
+        requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        });
     }
 
     function finishFirstDay(openTicket: boolean) {
@@ -368,6 +405,7 @@ export function App() {
                             element={<Ticket home={home} demoMode={demoMode} busy={busy} action={action} />}
                         />
                         <Route path="/history" element={<History home={home} />} />
+                        <Route path="/skills" element={<SkillProfile key={userId} home={home} signedIn={!!userId} />} />
                         <Route
                             path="/notifications"
                             element={<Notifications home={home} action={action} busy={busy || demoMode} />}
@@ -403,6 +441,9 @@ export function App() {
                     onSkip={() => finishFirstDay(false)}
                     onOpenTicket={() => finishFirstDay(true)}
                 />
+            )}
+            {!touring && celebration && (
+                <ChapterCelebration completion={celebration} onClose={closeChapter} onContinue={continueAfterChapter} />
             )}
             {!touring && toast && (
                 <div
@@ -724,37 +765,6 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
     );
 }
 
-function Copy({ value, label }: { value: string; label: string }) {
-    const [result, setResult] = useState('');
-    useEffect(() => {
-        if (!result) return;
-        const timer = setTimeout(() => setResult(''), 3000);
-        return () => clearTimeout(timer);
-    }, [result]);
-    return (
-        <>
-            <button
-                type="button"
-                className="button compact"
-                onClick={async () => {
-                    try {
-                        await navigator.clipboard.writeText(value);
-                        setResult('コピーしました');
-                    } catch {
-                        setResult('コピーできませんでした。テキストを選択してコピーしてください。');
-                    }
-                }}
-            >
-                <Clipboard size={14} />
-                {label}
-            </button>
-            <span className="copy-feedback" role="status">
-                {result}
-            </span>
-        </>
-    );
-}
-
 function Block({ title, children }: { title: string; children: ReactNode }) {
     return (
         <section className="panel block">
@@ -817,9 +827,18 @@ function TicketContent({
     );
     const ready = status !== 'locked' && status !== 'planned';
     const commands = branchCommands(task);
-    const latest = home.submissions.find(
-        (record) => record.task_id === task.id && record.head_sha === progress?.head_sha
-    );
+    const attempts = home.submissions.filter((record) => record.task_id === task.id);
+    const latestIndex = attempts.findIndex((record) => record.head_sha === progress?.head_sha);
+    const latest = attempts[latestIndex];
+    const previousAttempt =
+        latest &&
+        attempts
+            .slice(latestIndex + 1)
+            .find(
+                (record) =>
+                    record.run_url !== latest.run_url ||
+                    (record.run_attempt && latest.run_attempt && record.run_attempt < latest.run_attempt)
+            );
     return (
         <>
             <Link className="sub-link back" to="/project">
@@ -1027,7 +1046,7 @@ function TicketContent({
                         )}
                         {latest && (
                             <p>
-                                <a href={latest.run_url} target="_blank" rel="noreferrer">
+                                <a href={submissionLog(latest)} target="_blank" rel="noreferrer">
                                     {latest.result === 'passed' ? '合格' : '不合格'} · 実行ログ{' '}
                                     <ArrowUpRight size={12} />
                                 </a>
@@ -1037,9 +1056,9 @@ function TicketContent({
                         )}
                         {latest && !demoMode && (
                             <CriterionResults
-                                key={latest.run_url + latest.created_at}
+                                key={submissionLog(latest) + latest.created_at}
                                 submission={latest}
-                                taskId={task.id}
+                                previous={previousAttempt}
                                 criteria={task.criteria}
                             />
                         )}

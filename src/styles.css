@@ -863,3 +863,18 @@ input {
     grid-column: 2;
     font-size: 12px;
 }
+.qa-review {
+    margin: 14px 0;
+    padding: 12px;
+    border-inline-start: 2px solid var(--accent);
+    border-radius: 6px;
+    background: var(--blue-faint);
+}
+.block .qa-review p {
+    margin: 4px 0 0;
+}
+.criterion-improved {
+    width: fit-content;
+    display: flex;
+    margin-top: 4px;
+}

@@ -13,6 +13,7 @@ export type Submission = {
     head_sha: string;
     result: 'failed' | 'passed';
     run_url: string;
+    run_attempt?: number;
     created_at: string;
 };
 export type Notice = {
@@ -58,6 +59,26 @@ export const currentTask = (home: Home) =>
         const status = statusFor(home, task);
         return status === 'not_started' || status === 'in_progress' || status === 'passed';
     });
+
+export function chapterCompletion(before: Home, after: Home, taskId: string) {
+    const task = getTask(taskId);
+    const previousStatus = task && statusFor(before, task);
+    if (!task?.available || previousStatus === 'locked' || previousStatus === 'completed') return;
+    const chapterTasks = tasks.filter((item) => item.chapter === task.chapter);
+    if (chapterTasks.some((item) => item.available && statusFor(after, item) !== 'completed')) return;
+    const nextTask = tasks.find(
+        (item) =>
+            item.available &&
+            item.previous === taskId &&
+            item.chapter !== task.chapter &&
+            statusFor(after, item) === 'not_started'
+    );
+    return { chapter: task.chapter, hasPlanned: chapterTasks.some((item) => !item.available), nextTask };
+}
+
+export function submissionLog(submission: Submission) {
+    return submission.run_attempt ? submission.run_url + '/attempts/' + submission.run_attempt : submission.run_url;
+}
 
 export function noticeText(notice: Notice) {
     const task = getTask(notice.task_id);

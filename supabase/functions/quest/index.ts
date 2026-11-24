@@ -66,15 +66,17 @@ Deno.serve(async (request) => {
             if (!task?.available || !learner.data.repo_id || typeof input.runUrl !== 'string') {
                 throw new QuestError('採点結果が見つかりません。', 404);
             }
-            const result = await db
+            if (input.runAttempt !== undefined && (!Number.isSafeInteger(input.runAttempt) || input.runAttempt < 1)) {
+                throw new QuestError('採点の実行回数を指定してください。');
+            }
+            const query = db
                 .from('submissions')
                 .select('run_id,run_attempt,head_sha')
                 .eq('user_id', userId)
                 .eq('task_id', task.id)
-                .eq('run_url', input.runUrl)
-                .order('run_attempt', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+                .eq('run_url', input.runUrl);
+            if (input.runAttempt !== undefined) query.eq('run_attempt', input.runAttempt);
+            const result = await query.order('run_attempt', { ascending: false }).limit(1).maybeSingle();
             checked(result);
             if (!result.data) throw new QuestError('採点結果が見つかりません。', 404);
             const repo = await github<Repo>('/repositories/' + learner.data.repo_id);
@@ -176,9 +178,11 @@ Deno.serve(async (request) => {
                 .order('task_id'),
             db
                 .from('submissions')
-                .select('task_id,head_sha,result,run_url,created_at')
+                .select('task_id,head_sha,result,run_url,run_attempt,created_at')
                 .eq('user_id', userId)
-                .order('created_at', { ascending: false }),
+                .order('created_at', { ascending: false })
+                .order('run_id', { ascending: false })
+                .order('run_attempt', { ascending: false }),
             db
                 .from('notifications')
                 .select('id,task_id,kind,read_at,created_at')

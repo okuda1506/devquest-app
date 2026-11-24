@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import {
     ArrowLeft,
     ArrowRight,
@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { tasks, team, template } from '../supabase/functions/quest/catalog';
 import { menuTour } from './sidebar-menu';
+import { SetupHelp } from './setup-help';
+import { DialogueLine } from './dialogue-line';
 import './first-day.css';
 
 export const firstAssignment = tasks[0];
@@ -55,33 +57,6 @@ const setupChecks = [
     { label: 'EC サイトを開けた', host: 'localhost:5174' },
     { label: '店舗管理画面を開けた', host: 'localhost:5175' }
 ];
-
-function DialogueLine({ line, instant }: { line: string; instant: boolean }) {
-    let delay = 140;
-    return (
-        <p id="first-day-line" className="dialogue-line">
-            {instant ? (
-                line
-            ) : (
-                <>
-                    <span className="dialogue-transcript">{line}</span>
-                    <span aria-hidden="true">
-                        {Array.from(line).map((character, index) => {
-                            const hold = /[。！？]/u.test(character) ? 200 : /[、，]/u.test(character) ? 100 : 32;
-                            const style = { '--start': delay + 'ms', '--hold': hold + 'ms' } as CSSProperties;
-                            delay += hold;
-                            return (
-                                <span key={index} className="dialogue-letter" style={style}>
-                                    {character}
-                                </span>
-                            );
-                        })}
-                    </span>
-                </>
-            )}
-        </p>
-    );
-}
 
 function StaffPass() {
     return (
@@ -237,7 +212,7 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                     <h2 id="first-day-title" ref={titleRef} tabIndex={-1} aria-describedby="first-day-line">
                         {title}
                     </h2>
-                    <DialogueLine line={line} instant={instantDialogue} />
+                    <DialogueLine id="first-day-line" line={line} instant={instantDialogue} />
                     {scene === 'setup' && (
                         <div className="scene-setup-checklist">
                             <a className="button" href={setupReadme} target="_blank" rel="noopener noreferrer">
@@ -267,6 +242,7 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                                     </div>
                                 ))}
                             </fieldset>
+                            <SetupHelp />
                         </div>
                     )}
                 </div>

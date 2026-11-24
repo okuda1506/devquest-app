@@ -1,0 +1,93 @@
+.skills-section {
+    margin: 20px 0;
+}
+.skills-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.skills-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+.skill-card {
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+}
+.skill-card h3 {
+    margin: 0 0 14px;
+    font-size: 15px;
+    line-height: 1.65;
+}
+.skill-area {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 700;
+}
+.skill-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+    margin-top: auto;
+}
+.skill-share-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--muted);
+}
+.skill-share-option input {
+    margin: 0;
+    accent-color: var(--accent);
+}
+.skill-locked {
+    margin-top: 12px;
+}
+.skill-portfolio textarea {
+    display: block;
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    color: var(--text);
+    background: var(--canvas);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    resize: vertical;
+}
+.skill-timeline ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.skill-timeline li {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--line);
+}
+.skill-timeline li > svg {
+    margin-top: 5px;
+    color: var(--accent);
+}
+.skill-timeline small,
+.skill-timeline small a {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+}
+@media (max-width: 760px) {
+    .skills-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

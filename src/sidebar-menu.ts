@@ -1,4 +1,4 @@
-import { Bell, BookOpen, FileText, FolderKanban, LayoutDashboard } from 'lucide-react';
+import { Bell, BookOpen, FileText, FolderKanban, LayoutDashboard, Milestone } from 'lucide-react';
 
 export const workspaceLinks = [
     {
@@ -28,6 +28,13 @@ export const workspaceLinks = [
         label: '学習履歴',
         icon: BookOpen,
         line: '提出したコミットの採点結果と、完了した改修が残ります。前の作業を振り返りたいときに使ってください。'
+    },
+    {
+        id: 'menu-skills',
+        to: '/skills',
+        label: 'スキルプロフィール',
+        icon: Milestone,
+        line: '課題を通して身につけたスキルを確認できます。採点結果やマージ済みの PR もここから見返せますよ。'
     },
     {
         id: 'menu-notifications',
