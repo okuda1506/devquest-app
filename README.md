@@ -4,7 +4,7 @@ THREAD の開発チームに途中参画し、改修依頼を受け取って自�
 
 - DevQuest 本体は React、TypeScript、Vite と Supabase で構成します。
 - 演習コードと採点ワークフローは [THREAD テンプレート](https://github.com/okuda1506/devquest-fashion-template) にあります。商品のデータは演習者の PostgreSQL に保存され、DevQuest の DB とは独立します。
-- DEV-101〜104 を公開対象とし、DEV-105〜112 はストーリー上の追加予定として表示します。学習者による採点テストの追加は不要です。
+- DEV-101〜104 を公開対象とし、DEV-105〜120 は追加予定です。各チャプターに5件の課題を用意しています。学習者による採点テストの追加は不要です。
 
 ## クエスト画面
 

@@ -102,8 +102,11 @@ function github({
 }
 
 describe('演習の判定', () => {
-    test('12課題の指定ブランチと公開範囲が一致する', () => {
-        expect(tasks).toHaveLength(12);
+    test('各チャプターに5課題があり、指定ブランチと公開範囲が一致する', () => {
+        expect(tasks).toHaveLength(20);
+        expect([0, 1, 2, 3].map((chapter) => tasks.filter((task) => task.chapter === chapter).length)).toEqual([
+            5, 5, 5, 5
+        ]);
         expect(tasks.filter((item) => item.available).map((item) => item.id)).toEqual([
             'DEV-101',
             'DEV-102',

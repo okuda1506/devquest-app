@@ -660,6 +660,7 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
             {chapters.slice(0, nextChapter).map((chapter, index) => {
                 const visibleTasks = unlockedTasks.filter((task) => task.chapter === index);
                 const publishedTasks = tasks.filter((task) => task.chapter === index && task.available);
+                const plannedCount = tasks.filter((task) => task.chapter === index && !task.available).length;
                 const complete =
                     publishedTasks.length > 0 && publishedTasks.every((task) => statusFor(home, task) === 'completed');
                 return (
@@ -674,9 +675,7 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
                                 {complete ? (
                                     <>
                                         <Check size={15} />
-                                        {tasks.some((task) => task.chapter === index && !task.available)
-                                            ? '公開分完了'
-                                            : '完了'}
+                                        {plannedCount ? '公開分完了' : '完了'}
                                     </>
                                 ) : visibleTasks.length ? (
                                     '進行中'
@@ -700,6 +699,7 @@ function ChapterRoadmap({ home, unlockedChapter }: { home: Home; unlockedChapter
                                 </Link>
                             );
                         })}
+                        {plannedCount > 0 && <p className="panel-body muted">追加予定の課題 {plannedCount} 件</p>}
                         {!visibleTasks.length && (
                             <div className="panel-body">
                                 <Link className="sub-link" to="/settings">
