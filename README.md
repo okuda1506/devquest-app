@@ -6,6 +6,10 @@ THREAD の開発チームに途中参画し、改修依頼を受け取って自�
 - 演習コードと採点ワークフローは [THREAD テンプレート](https://github.com/okuda1506/devquest-fashion-template) にあります。商品のデータは演習者の PostgreSQL に保存され、DevQuest の DB とは独立します。
 - 各チャプター10件ずつ、計40件の課題（DEV-101〜140）を自動採点します。課題は DevQuest に表示される順に進めます。
 
+## 学習者の環境構築
+
+[DevQuest](https://okuda1506.github.io/devquest-app/) をブラウザで開いて初出勤を開始します。環境構築の場面で GitHub を連携してから、演習リポジトリを作成・登録します。手元で起動する THREAD の手順は [Windows（WSL 2 / Ubuntu）](https://github.com/okuda1506/devquest-fashion-template#windows) または [macOS](https://github.com/okuda1506/devquest-fashion-template#macos) を参照してください。
+
 ## クエスト画面
 
 ![DEV-101「商品カードに在庫状況を表示する」の課題詳細。改修依頼、作業ブランチ、採点結果が並ぶ](docs/screenshots/quest-dev-101.webp)
@@ -38,6 +42,8 @@ npm run build
 DB テストは既存インスタンスから独立した一時的な PostgreSQL コンテナで実行します。RLS、採点合格からマージによる完了への遷移、次の課題の解放、通知の重複防止を検証します。GitHub API の判定はレスポンスの代替データを使ってテストします。Deno CLI がある場合は `deno check supabase/functions/quest/index.ts` で Edge Function の型を確認できます。
 
 ## 初回の公開設定
+
+Google 登録・ログインへの移行は [Google 認証の公開手順](docs/google-onboarding-rollout.md) を参照してください。
 
 1. THREAD リポジトリの GitHub **Settings → General** で **Template repository** を有効にします。Actions の利用も許可します。テンプレートは公開し、main を既定ブランチにします。
 2. Supabase Free でプロジェクトを作り、GitHub の **Developer settings → OAuth Apps** で OAuth App を作成します。GitHub の **Authorization callback URL** には Supabase のプロバイダー画面に表示された `https://<project-ref>.supabase.co/auth/v1/callback` を登録します。Supabase **Authentication → Providers → GitHub** に GitHub の Client ID と Secret を入れます。

@@ -1,4 +1,5 @@
 import { getTask, tasks, type Task } from '../supabase/functions/quest/catalog';
+import type { FirstDayCheckpoint } from '../supabase/functions/quest/onboarding';
 import type { GradeCheck } from '../supabase/functions/quest/grade-check';
 
 export type Status = 'not_started' | 'in_progress' | 'passed' | 'completed' | 'locked' | 'planned';
@@ -25,7 +26,14 @@ export type Notice = {
     created_at: string;
 };
 export type Home = {
-    profile: { github_login: string; repo_name: string | null };
+    profile: {
+        github_login: string | null;
+        repo_name: string | null;
+        display_name?: string | null;
+        google_linked?: boolean;
+        onboarding?: FirstDayCheckpoint | null;
+        first_day_completed?: boolean;
+    };
     progress: Progress[];
     submissions: Submission[];
     notifications: Notice[];

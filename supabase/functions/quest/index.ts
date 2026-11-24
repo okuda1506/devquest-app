@@ -2,6 +2,7 @@ import { authenticate, questDatabase } from './auth.ts';
 import { exchangeOAuth } from './oauth.ts';
 import { QuestError } from './auth-errors.ts';
 import { getTask, tasks } from './catalog.ts';
+import { normalizeDisplayName, readFirstDayCheckpoint } from './onboarding.ts';
 import type { GradeCheck } from './grade-check.ts';
 import {
     githubClient,
@@ -56,30 +57,50 @@ Deno.serve(async (request) => {
         if (request.method !== 'POST') throw new QuestError('この操作は利用できません。', 405);
         const input = await request.json().catch(() => null);
         if (!input || typeof input.action !== 'string') throw new QuestError('操作を指定してください。');
-        if (['grade', 'register', 'exchange', 'home', 'criteria', 'read'].includes(input.action))
+        if (
+            [
+                'grade',
+                'register',
+                'exchange',
+                'home',
+                'criteria',
+                'read',
+                'onboarding',
+                'display_name',
+                'finish_first_day'
+            ].includes(input.action)
+        )
             log.action = input.action;
 
         if (input.action === 'exchange') {
             return Response.json(await exchangeOAuth(input.code, input.verifier, env), { headers: cors });
         }
-        const { db, userId, githubId, login } = await authenticate(request, env);
+        const { db, userId, githubId, login, googleLinked, displayName } = await authenticate(request, env);
         log.learnerId = userId;
-        const created = await db
-            .from('learners')
-            .upsert(
-                { user_id: userId, github_id: githubId, github_login: login },
-                { onConflict: 'user_id', ignoreDuplicates: true }
+        const synced = await db.rpc('sync_learner', {
+            p_user: userId,
+            p_github: githubId,
+            p_login: login,
+            p_display: displayName
+        });
+        if (synced.error?.code === '23505' || (!synced.error && !synced.data)) {
+            throw new QuestError(
+                'この GitHub アカウントは別の学習者に連携済みか、登録時と異なります。元のアカウントでサインインしてください。',
+                409
             );
-        checked(created);
+        }
+        checked(synced);
         const learner = await db
             .from('learners')
-            .select('github_id, repo_id, repo_name')
+            .select('repo_id, repo_name, first_day_completed')
             .eq('user_id', userId)
             .single();
         checked(learner);
-        if (learner.data?.github_id !== githubId)
-            throw new QuestError('登録時と同じ GitHub アカウントでログインしてください。', 403);
+        if (!learner.data) throw new QuestError('学習者プロフィールを取得できませんでした。', 503);
 
+        if (!githubId && ['register', 'grade', 'criteria', 'finish_first_day'].includes(input.action)) {
+            throw new QuestError('先に GitHub アカウントを連携してください。', 403);
+        }
         const github = githubClient(env('QUEST_GITHUB_READ_TOKEN'));
         const additionalBaselines = (env('THREAD_TEMPLATE_SHA') ?? '')
             .split(',')
@@ -88,7 +109,7 @@ Deno.serve(async (request) => {
         const canonical = [...templateBaselines, ...additionalBaselines];
         let gradeCheck: GradeCheck | undefined;
 
-        if (input.action === 'criteria') {
+        if (input.action === 'criteria' && githubId) {
             const task = typeof input.taskId === 'string' ? getTask(input.taskId) : undefined;
             if (!task?.available || !learner.data.repo_id || typeof input.runUrl !== 'string') {
                 throw new QuestError('採点結果が見つかりません。', 404);
@@ -120,7 +141,7 @@ Deno.serve(async (request) => {
             return Response.json({ criteria }, { headers: cors });
         }
 
-        if (input.action === 'register') {
+        if (input.action === 'register' && githubId) {
             const name = repoName(input.repository);
             const repo = await github<Repo>('/repos/' + name).catch((error) => {
                 if (error instanceof QuestError && error.status === 404) {
@@ -136,7 +157,9 @@ Deno.serve(async (request) => {
             const sha = await readHead(github, repo.full_name, 'main');
             if (!sha) throw new QuestError('main ブランチを確認できません。');
             await verifyProtection(github, canonical, repo.full_name, sha);
-            const registered = await db.rpc('register_learner_repo', {
+            const registerProcedure =
+                googleLinked && !learner.data.first_day_completed ? 'stage_learner_repo' : 'register_learner_repo';
+            const registered = await db.rpc(registerProcedure, {
                 p_user: userId,
                 p_repo: repo.id,
                 p_name: repo.full_name
@@ -148,7 +171,7 @@ Deno.serve(async (request) => {
                 );
             }
             checked(registered);
-        } else if (input.action === 'grade') {
+        } else if (input.action === 'grade' && githubId) {
             const task = typeof input.taskId === 'string' ? getTask(input.taskId) : undefined;
             if (!task?.available) throw new QuestError('採点対象の課題が見つかりません。', 404);
             if (!learner.data?.repo_id) throw new QuestError('演習用リポジトリを先に登録してください。');
@@ -206,6 +229,24 @@ Deno.serve(async (request) => {
                 gradeCheck = { taskId: task.id, state: 'completed' };
                 log.outcome = 'completed';
             }
+        } else if (input.action === 'display_name') {
+            const display = normalizeDisplayName(input.value);
+            if (!display || display !== input.value) throw new QuestError('表示名は1〜50文字で入力してください。');
+            checked(await db.from('learners').update({ display_name: display }).eq('user_id', userId));
+        } else if (input.action === 'onboarding') {
+            const checkpoint = readFirstDayCheckpoint(input.checkpoint);
+            if (!checkpoint) throw new QuestError('初出勤の進行状況を確認できませんでした。');
+            checked(
+                await db
+                    .from('learners')
+                    .update({ onboarding: checkpoint })
+                    .eq('user_id', userId)
+                    .eq('first_day_completed', false)
+            );
+        } else if (input.action === 'finish_first_day' && githubId) {
+            const result = await db.rpc('finish_first_day', { p_user: userId, p_github: githubId });
+            checked(result);
+            if (!result.data) throw new QuestError('演習リポジトリを登録し、2つの画面の起動を確認してください。');
         } else if (input.action === 'read') {
             if (!Number.isSafeInteger(input.notificationId)) throw new QuestError('通知を指定してください。');
             checked(
@@ -221,7 +262,11 @@ Deno.serve(async (request) => {
         }
 
         const [profile, progress, submissions, notifications] = await Promise.all([
-            db.from('learners').select('github_login,repo_name').eq('user_id', userId).single(),
+            db
+                .from('learners')
+                .select('github_login,repo_name,display_name,onboarding,first_day_completed')
+                .eq('user_id', userId)
+                .single(),
             db
                 .from('progress')
                 .select('task_id,status,head_sha,pull_number,merge_sha,completed_at')
@@ -243,7 +288,7 @@ Deno.serve(async (request) => {
         [profile, progress, submissions, notifications].forEach((result) => checked(result));
         return Response.json(
             {
-                profile: profile.data,
+                profile: { ...profile.data, github_login: githubId ? login : null, google_linked: googleLinked },
                 progress: progress.data,
                 submissions: submissions.data,
                 notifications: notifications.data,

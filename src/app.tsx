@@ -1,13 +1,4 @@
-import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-    useSyncExternalStore,
-    type FormEvent,
-    type ReactNode,
-    type RefObject
-} from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from 'react';
 import {
     ArrowDownRight,
     ArrowRight,
@@ -32,9 +23,18 @@ import {
     Terminal,
     X
 } from 'lucide-react';
-import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { branchCommands, chapters, getTask, tasks, template, type Task } from '../supabase/functions/quest/catalog';
-import { callQuest, finishSignIn, QuestRequestError, sessionExpiration, signIn, supabase } from './client';
+import {
+    callQuest,
+    finishSignIn,
+    googleOnboarding,
+    linkProvider,
+    QuestRequestError,
+    sessionExpiration,
+    signIn,
+    supabase
+} from './client';
 import {
     chapterCompletion,
     currentTask,
@@ -52,6 +52,9 @@ import {
 import { readPreference, savePreference } from './preferences';
 import './styles.css';
 import { clearFirstDayCheckpoint, FirstDay, firstAssignment } from './first-day';
+import { RepositoryForm } from './repository-form';
+import { Welcome } from './welcome';
+import type { FirstDayCheckpoint } from '../supabase/functions/quest/onboarding';
 import { GradeFeedback } from './grade-feedback';
 import { settingsLink, threadLink, workspaceLinks } from './sidebar-menu';
 import { Documents } from './documents';
@@ -79,6 +82,11 @@ function subscribeViewport(update: () => void) {
 
 export function App() {
     const [userId, setUserId] = useState<string | null>(null);
+    const [authError, setAuthError] = useState('');
+    const [signingIn, setSigningIn] = useState(false);
+    const [signingOut, setSigningOut] = useState(false);
+    const [linking, setLinking] = useState(false);
+    const [firstDayActive, setFirstDayActive] = useState(false);
     const [loadingAuth, setLoadingAuth] = useState(!!supabase);
     const [data, setData] = useState<Home>(empty);
     const latestHome = useRef<Home>(empty);
@@ -103,7 +111,19 @@ export function App() {
     const navigate = useNavigate();
     const projectRef = useRef<HTMLElement>(null);
     const [showFirstDay, setShowFirstDay] = useState(() => readPreference('devquest-first-day') !== 'seen');
-    const touring = showFirstDay && location.pathname === '/' && !loadingAuth;
+    const firstDayComplete = googleOnboarding ? data.profile.first_day_completed === true : !showFirstDay;
+    const callbackResume = new URLSearchParams(location.search).get('first-day') === 'resume';
+    const touring =
+        location.pathname === '/' &&
+        !loadingAuth &&
+        (googleOnboarding
+            ? !!userId &&
+              data.profile.first_day_completed !== undefined &&
+              (firstDayActive ||
+                  (callbackResume &&
+                      !firstDayComplete &&
+                      (data.profile.onboarding?.scene === 'setup' || data.profile.onboarding?.scene === 'request')))
+            : showFirstDay);
     const mobileDrawerOpen = isMobile && mobileMenuOpen && !touring;
     const demoMode = !userId;
     const home = demoMode ? demo : data;
@@ -122,6 +142,7 @@ export function App() {
                 latestHome.current = empty;
                 setData(empty);
                 setCelebration(undefined);
+                setFirstDayActive(false);
                 setToast(null);
                 queuedToast.current = null;
                 setBusy(false);
@@ -152,8 +173,9 @@ export function App() {
         window.addEventListener('focus', checkExpiry);
         void finishSignIn()
             .catch((cause: Error) => {
-                if (active) setError(cause.message);
+                if (active) setAuthError(cause.message);
             })
+            .then(() => auth.getSession())
             .finally(() => {
                 if (active) setLoadingAuth(false);
             });
@@ -177,6 +199,9 @@ export function App() {
         try {
             const next = await callQuest<Home>(input);
             if (requester !== activeUser.current) return false;
+            if (googleOnboarding && typeof next.profile?.first_day_completed !== 'boolean') {
+                throw new Error('新しい認証フローの接続先を確認できませんでした。時間をおいて再試行してください。');
+            }
             if (gradeTask) {
                 const completed = chapterCompletion(latestHome.current, next, gradeTask);
                 if (completed) setCelebration(completed);
@@ -199,7 +224,7 @@ export function App() {
                     : undefined;
             const notification =
                 completion ?? pending.find((notice) => unlockedChapterFor(notice) !== undefined) ?? pending[0];
-            if (notification) {
+            if (notification && input.action !== 'finish_first_day') {
                 for (const notice of next.notifications) seen.current.add(notice.id);
                 if (completion) {
                     queuedToast.current =
@@ -232,13 +257,14 @@ export function App() {
     }, []);
 
     useEffect(() => {
+        if (loadingAuth) return;
         if (userId) void action({ action: 'home' });
         else {
             setData(empty);
             setToast(null);
             seen.current.clear();
         }
-    }, [userId, action]);
+    }, [userId, action, loadingAuth]);
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
         document
@@ -256,11 +282,53 @@ export function App() {
               : 'リポジトリ設定');
     const current = currentTask(home);
     const unlockedChapter = toast ? unlockedChapterFor(toast) : undefined;
-    const login = () => void signIn().catch((cause: Error) => setError(cause.message));
-    const logout = () =>
-        void supabase?.auth.signOut({ scope: 'local' }).then(({ error }) => {
-            if (error) setError('ログアウトできませんでした。');
+    function login() {
+        if (signingIn) return;
+        setAuthError('');
+        setSigningIn(true);
+        void signIn().catch((cause: Error) => {
+            setAuthError(cause.message);
+            setSigningIn(false);
         });
+    }
+
+    async function logout() {
+        if (!supabase || signingOut) return;
+        setAuthError('');
+        setSigningOut(true);
+        try {
+            const result = await supabase.auth.signOut({ scope: 'local' });
+            if (result.error && sessionExpiration()) throw result.error;
+            setError('');
+            navigate('/', { replace: true });
+            if (result.error) {
+                setAuthError(
+                    'このブラウザからサインアウトしました。通信エラーによりサーバー側での失効は確認できませんでした。'
+                );
+            }
+        } catch {
+            setAuthError('セッションを終了できませんでした。接続を確認してから、再度サインアウトを押してください。');
+        } finally {
+            setSigningOut(false);
+        }
+    }
+
+    async function connect(provider: 'github' | 'google', returnHash: string) {
+        if (linking) return;
+        setAuthError('');
+        setLinking(true);
+        try {
+            await linkProvider(provider, returnHash);
+        } catch (cause) {
+            setAuthError((cause as Error).message);
+            setLinking(false);
+        }
+    }
+    const signOutButton = (
+        <button type="button" className="button signout-button" disabled={signingOut} onClick={logout}>
+            <LogOut size={15} aria-hidden="true" /> サインアウト
+        </button>
+    );
 
     function dismissToast() {
         setToast(queuedToast.current);
@@ -291,13 +359,19 @@ export function App() {
         });
     }
 
-    function finishFirstDay(openTicket: boolean) {
-        clearFirstDayCheckpoint();
-        savePreference('devquest-first-day', 'seen');
-        setShowFirstDay(false);
+    async function finishFirstDay(openTicket: boolean) {
+        if (googleOnboarding) {
+            if (openTicket && !firstDayComplete && !(await action({ action: 'finish_first_day' }))) return;
+            setFirstDayActive(false);
+            if (!openTicket) navigate('/', { replace: true });
+        } else {
+            clearFirstDayCheckpoint();
+            savePreference('devquest-first-day', 'seen');
+            setShowFirstDay(false);
+        }
         if (openTicket) {
             if (toast?.kind === 'assigned' && toast.task_id === firstAssignment.id) setToast(null);
-            navigate('/tasks/' + firstAssignment.id, { state: { firstDay: true } });
+            navigate('/tasks/' + firstAssignment.id, { replace: callbackResume, state: { firstDay: true } });
         }
         requestAnimationFrame(() => {
             document.getElementById('main-content')?.focus({ preventScroll: true });
@@ -306,8 +380,13 @@ export function App() {
     }
 
     function replayFirstDay() {
-        if (!showFirstDay) clearFirstDayCheckpoint();
-        setShowFirstDay(true);
+        if (googleOnboarding) {
+            setAuthError('');
+            setFirstDayActive(true);
+        } else {
+            if (!showFirstDay) clearFirstDayCheckpoint();
+            setShowFirstDay(true);
+        }
         setMobileMenuOpen(false);
         navigate('/');
     }
@@ -339,6 +418,69 @@ export function App() {
                 document.getElementById('main-content')?.focus({ preventScroll: true });
             }
         });
+    }
+
+    if (googleOnboarding) {
+        const publicPage =
+            location.pathname === '/signin' ? 'signin' : location.pathname === '/signup' ? 'signup' : undefined;
+        if (loadingAuth)
+            return (
+                <main className="content">
+                    <p role="status">サインインを確認中…</p>
+                </main>
+            );
+        if (!userId) {
+            if (location.pathname !== '/' && !publicPage) return <Navigate to="/" replace />;
+            return (
+                <Welcome page={publicPage} login={login} error={authError} disabled={!supabase} signingIn={signingIn} />
+            );
+        }
+        if (data.profile.first_day_completed === undefined) {
+            return (
+                <main className="content">
+                    {error ? (
+                        <>
+                            <p className="feedback error" role="alert">
+                                {error}
+                            </p>
+                            <button className="button" onClick={() => void action({ action: 'home' })}>
+                                再試行
+                            </button>
+                            {signOutButton}
+                        </>
+                    ) : (
+                        <p role="status">学習者プロフィールを確認中…</p>
+                    )}
+                </main>
+            );
+        }
+        if (publicPage || (!firstDayComplete && location.pathname !== '/')) return <Navigate to="/" replace />;
+        if (!firstDayComplete && !touring) {
+            return (
+                <div className="welcome">
+                    <header className="welcome-header">
+                        <div className="welcome-container welcome-header-content">
+                            <strong className="welcome-brand">DevQuest</strong>
+                            {signOutButton}
+                        </div>
+                    </header>
+                    <main className="content first-day-start" id="main-content" tabIndex={-1}>
+                        <Title
+                            title="初出勤"
+                            description="THREAD 開発チームに合流し、最初の改修依頼を受け取る準備をします。"
+                        />
+                        {authError && (
+                            <p className="feedback error" role="alert">
+                                {authError}
+                            </p>
+                        )}
+                        <button className="button primary" onClick={replayFirstDay}>
+                            {data.profile.onboarding ? '初出勤の続きから' : '初出勤する'} <ArrowRight size={16} />
+                        </button>
+                    </main>
+                </div>
+            );
+        }
     }
 
     return (
@@ -468,13 +610,15 @@ export function App() {
                         </Link>
                         {userId ? (
                             <div className="account">
-                                <span>{home.profile.github_login || 'GitHub'}</span>
-                                <button className="icon-button" aria-label="ログアウト" onClick={logout}>
-                                    <LogOut size={16} />
-                                </button>
+                                <span>{home.profile.display_name || home.profile.github_login || '学習者'}</span>
+                                {signOutButton}
                             </div>
                         ) : (
-                            <button className="button login" onClick={login} disabled={!supabase || loadingAuth}>
+                            <button
+                                className="button login"
+                                onClick={login}
+                                disabled={!supabase || loadingAuth || signingIn}
+                            >
                                 <Github size={16} />
                                 GitHub で始める
                             </button>
@@ -495,10 +639,10 @@ export function App() {
                             確認中…
                         </p>
                     )}
-                    {error && (
+                    {(error || authError) && !touring && (
                         <p className="feedback error" role="alert">
-                            {error}{' '}
-                            {userId && (
+                            {error || authError}{' '}
+                            {userId && error && (
                                 <button className="text-button" onClick={() => void action({ action: 'home' })}>
                                     データを再取得
                                 </button>
@@ -548,7 +692,9 @@ export function App() {
                                     demoMode={demoMode}
                                     login={login}
                                     replayFirstDay={replayFirstDay}
-                                    firstDaySeen={!showFirstDay}
+                                    firstDaySeen={firstDayComplete}
+                                    connectGoogle={() => void connect('google', '#/settings')}
+                                    linking={linking}
                                 />
                             }
                         />
@@ -567,8 +713,22 @@ export function App() {
             {touring && (
                 <FirstDay
                     projectRef={projectRef}
-                    onSkip={() => finishFirstDay(false)}
-                    onOpenTicket={() => finishFirstDay(true)}
+                    onSkip={() => void finishFirstDay(false)}
+                    onOpenTicket={() => void finishFirstDay(true)}
+                    account={
+                        googleOnboarding
+                            ? {
+                                  profile: home.profile,
+                                  busy: busy || linking,
+                                  error: error || authError,
+                                  action,
+                                  linkGithub: () => void connect('github', '#/?first-day=resume'),
+                                  save: firstDayComplete
+                                      ? undefined
+                                      : (checkpoint: FirstDayCheckpoint) => action({ action: 'onboarding', checkpoint })
+                              }
+                            : undefined
+                    }
                 />
             )}
             {!touring && celebration && (
@@ -1349,7 +1509,9 @@ function Settings({
     demoMode,
     login,
     replayFirstDay,
-    firstDaySeen
+    firstDaySeen,
+    connectGoogle,
+    linking
 }: {
     replayFirstDay: () => void;
     home: Home;
@@ -1358,6 +1520,8 @@ function Settings({
     demoMode: boolean;
     login: () => void;
     firstDaySeen: boolean;
+    connectGoogle: () => void;
+    linking: boolean;
 }) {
     const assigned = currentTask(home);
     return (
@@ -1366,6 +1530,23 @@ function Settings({
                 title="演習リポジトリの設定"
                 description="THREAD の自分専用リポジトリを作成し、DevQuest に登録します。"
             />
+            {!demoMode && home.profile.first_day_completed !== undefined && (
+                <Block title="DevQuest プロフィール">
+                    <DisplayNameForm
+                        key={home.profile.display_name}
+                        value={home.profile.display_name ?? ''}
+                        busy={busy}
+                        action={action}
+                    />
+                    {home.profile.google_linked ? (
+                        <p>Google 連携済み</p>
+                    ) : (
+                        <button className="button" disabled={busy || linking} onClick={connectGoogle}>
+                            Google ログインを追加
+                        </button>
+                    )}
+                </Block>
+            )}
             <Block title="GitHub アカウント">
                 {demoMode ? (
                     <>
@@ -1446,32 +1627,21 @@ function Settings({
     );
 }
 
-function RepositoryForm({ login, busy, action }: { login: string; busy: boolean; action: Action }) {
-    const draftKey = 'devquest-repository-draft:' + login;
-    const [repository, setRepository] = useState(() => readPreference(draftKey) ?? '');
-    async function register(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault();
-        if (await action({ action: 'register', repository })) savePreference(draftKey, '');
-    }
+function DisplayNameForm({ value, busy, action }: { value: string; busy: boolean; action: Action }) {
     return (
-        <form onSubmit={register}>
+        <form
+            onSubmit={(event) => {
+                event.preventDefault();
+                const name = String(new FormData(event.currentTarget).get('displayName') ?? '').trim();
+                void action({ action: 'display_name', value: name });
+            }}
+        >
             <label className="repo-field">
-                GitHub のリポジトリ URL または所有者名/リポジトリ名
-                <input
-                    name="repository"
-                    placeholder={`https://github.com/${login}/thread`}
-                    value={repository}
-                    onChange={(event) => {
-                        setRepository(event.target.value);
-                        savePreference(draftKey, event.target.value);
-                    }}
-                    autoComplete="off"
-                    required
-                    maxLength={180}
-                />
+                表示名
+                <input name="displayName" defaultValue={value} maxLength={50} required />
             </label>
-            <button className="button primary" disabled={busy || !repository.trim()}>
-                登録する <ArrowRight size={15} />
+            <button className="button" disabled={busy}>
+                表示名を保存
             </button>
         </form>
     );

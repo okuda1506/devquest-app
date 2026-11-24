@@ -14,6 +14,10 @@ import { menuTour } from './sidebar-menu';
 import { SetupHelp } from './setup-help';
 import { DialogueLine, Speaker, useDialoguePlayback } from './dialogue-line';
 import { readPreference, savePreference } from './preferences';
+import { Copy } from './copy';
+import { RepositoryForm } from './repository-form';
+import type { Home } from './model';
+import { readFirstDayCheckpoint, type FirstDayCheckpoint } from '../supabase/functions/quest/onboarding';
 import './first-day.css';
 
 export const firstAssignment = tasks[0];
@@ -56,7 +60,6 @@ const scenes = {
         line: 'お疲れさまです。最初の依頼が届きました。' + firstAssignment.description
     }
 } as const;
-type Scene = keyof typeof scenes;
 const sceneCount = Object.keys(scenes).length;
 const setupReadme = 'https://github.com/' + template + '#初回セットアップ';
 const setupChecks = [
@@ -69,23 +72,13 @@ export function clearFirstDayCheckpoint() {
     savePreference(checkpointKey, '');
 }
 
+const firstCheckpoint: FirstDayCheckpoint = { scene: 'arrival', menuIndex: 0, openedPages: [] };
+
 function readCheckpoint() {
-    const start = { scene: 'arrival' as Scene, menuIndex: 0, openedPages: [] as string[] };
     try {
-        const saved = JSON.parse(readPreference(checkpointKey) ?? 'null');
-        if (!saved || typeof saved.scene !== 'string' || !Object.hasOwn(scenes, saved.scene)) return start;
-        return {
-            scene: saved.scene as Scene,
-            menuIndex:
-                Number.isInteger(saved.menuIndex) && saved.menuIndex >= 0 && saved.menuIndex < menuTour.length
-                    ? Number(saved.menuIndex)
-                    : 0,
-            openedPages: Array.isArray(saved.openedPages)
-                ? setupChecks.map(({ host }) => host).filter((host) => saved.openedPages.includes(host))
-                : []
-        };
+        return readFirstDayCheckpoint(JSON.parse(readPreference(checkpointKey) ?? 'null')) ?? firstCheckpoint;
     } catch {
-        return start;
+        return firstCheckpoint;
     }
 }
 
@@ -105,19 +98,33 @@ function StaffPass() {
     );
 }
 
+type FirstDayAccount = {
+    profile: Home['profile'];
+    busy: boolean;
+    error: string;
+    action: (input: Record<string, unknown>) => Promise<boolean>;
+    linkGithub: () => void;
+    save?: (checkpoint: FirstDayCheckpoint) => Promise<boolean>;
+};
+
 type FirstDayProps = {
     projectRef: RefObject<HTMLElement | null>;
     onSkip: () => void;
     onOpenTicket: () => void;
+    account?: FirstDayAccount;
 };
 
-export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
-    const [checkpoint] = useState(readCheckpoint);
-    const [scene, setScene] = useState<Scene>(checkpoint.scene);
-    const [menuIndex, setMenuIndex] = useState(checkpoint.menuIndex);
-    const [openedPages, setOpenedPages] = useState<string[]>(checkpoint.openedPages);
+export function FirstDay({ projectRef, onSkip, onOpenTicket, account }: FirstDayProps) {
+    const [checkpoint, setCheckpoint] = useState(() =>
+        account ? (readFirstDayCheckpoint(account.profile.onboarding) ?? firstCheckpoint) : readCheckpoint()
+    );
+    const { scene, openedPages } = checkpoint;
+    const menuIndex = Math.min(checkpoint.menuIndex, menuTour.length - 1);
+    const saving = useRef(false);
+    const [os, setOs] = useState<'windows' | 'macos'>('windows');
     const [instantDialogue, setInstantDialogue] = useState(false);
     const dialogRef = useRef<HTMLDialogElement>(null);
+    const errorRef = useRef<HTMLParagraphElement>(null);
     const titleRef = useRef<HTMLHeadingElement>(null);
     const { step, label } = scenes[scene];
     const menuItem = scene === 'menu' ? menuTour[menuIndex] : undefined;
@@ -129,12 +136,42 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                   next: lastMenuItem ? '開発環境を準備する' : '次の項目へ',
                   line: menuTour[menuIndex].line
               }
-            : scenes[scene];
+            : scene === 'arrival' && account
+              ? {
+                    ...scenes.arrival,
+                    line:
+                        (account.profile.display_name ? account.profile.display_name + 'さん、' : '') +
+                        'はじめまして！ ' +
+                        scenes.arrival.line
+                }
+              : scenes[scene];
     const { typing, finish } = useDialoguePlayback(line, instantDialogue);
 
     useEffect(() => {
-        savePreference(checkpointKey, JSON.stringify({ scene, menuIndex, openedPages }));
-    }, [scene, menuIndex, openedPages]);
+        if (account?.error) errorRef.current?.scrollIntoView({ block: 'nearest' });
+    }, [account?.error]);
+
+    const localCheckpoint = !account;
+    useEffect(() => {
+        if (localCheckpoint) savePreference(checkpointKey, JSON.stringify(checkpoint));
+    }, [checkpoint, localCheckpoint]);
+
+    async function move(patch: Partial<FirstDayCheckpoint>) {
+        if (saving.current || account?.busy) return;
+        const next = { ...checkpoint, ...patch };
+        const toggle = patch.openedPages !== undefined;
+        if (toggle) setCheckpoint(next);
+        saving.current = true;
+        try {
+            if (!account?.save || (await account.save(next))) {
+                if (!toggle) setCheckpoint(next);
+            } else if (toggle) {
+                setCheckpoint(checkpoint);
+            }
+        } finally {
+            saving.current = false;
+        }
+    }
 
     useLayoutEffect(() => {
         const dialog = dialogRef.current!;
@@ -195,14 +232,19 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
     }, [menuItem]);
 
     function advance() {
-        if (scene === 'arrival') setScene('project');
-        else if (scene === 'project') setScene('menu');
+        if (scene === 'arrival') void move({ scene: 'project' });
+        else if (scene === 'project') void move({ scene: 'menu' });
         else if (scene === 'menu') {
-            if (lastMenuItem) setScene('setup');
-            else setMenuIndex((index) => index + 1);
-        } else if (scene === 'setup') setScene('request');
+            if (lastMenuItem) void move({ scene: 'setup' });
+            else void move({ menuIndex: menuIndex + 1 });
+        } else if (scene === 'setup') void move({ scene: 'request' });
         else onOpenTicket();
     }
+
+    const readyToStart = !account || !!(account.profile.github_login && account.profile.repo_name);
+    const cloneCommand = account?.profile.repo_name
+        ? 'git clone https://github.com/' + account.profile.repo_name + '.git'
+        : '';
 
     return (
         <dialog
@@ -212,7 +254,7 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
             aria-describedby="first-day-line"
             onCancel={(event) => {
                 event.preventDefault();
-                onSkip();
+                if (!account?.busy) onSkip();
             }}
         >
             <div className="scene-top">
@@ -222,8 +264,12 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                     <ChevronRight size={13} />
                     <strong>{label}</strong>
                 </div>
-                <button className="scene-skip" onClick={menuItem ? () => setScene('setup') : onSkip}>
-                    {menuItem ? 'メニュー案内を省略' : 'スキップ'}
+                <button
+                    className="scene-skip"
+                    disabled={account?.busy}
+                    onClick={menuItem ? () => void move({ scene: 'setup' }) : onSkip}
+                >
+                    {menuItem ? 'メニュー案内を省略' : account ? '案内を閉じる' : 'スキップ'}
                 </button>
             </div>
             <div className="scene-body" key={menuItem?.id ?? scene}>
@@ -256,36 +302,138 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                         {title}
                     </h2>
                     <DialogueLine id="first-day-line" line={line} typing={typing} onComplete={finish} />
+                    {account?.error && (
+                        <p className="feedback error" role="alert" ref={errorRef}>
+                            {account.error}
+                        </p>
+                    )}
                     {scene === 'setup' && (
                         <div className="scene-setup-checklist">
-                            <a className="button" href={setupReadme} target="_blank" rel="noopener noreferrer">
-                                THREAD の初回セットアップ <ExternalLink size={15} aria-hidden="true" />
-                            </a>
-                            <fieldset>
-                                <legend>起動確認</legend>
-                                {setupChecks.map(({ label, host }) => (
-                                    <div className="scene-setup-check" key={host}>
-                                        <label>
-                                            <input
-                                                type="checkbox"
-                                                checked={openedPages.includes(host)}
-                                                onChange={({ target: { checked } }) =>
-                                                    setOpenedPages((pages) =>
-                                                        checked
-                                                            ? [...pages, host]
-                                                            : pages.filter((page) => page !== host)
-                                                    )
+                            {account && (
+                                <div className="onboarding-setup">
+                                    {!account.profile.github_login ? (
+                                        <div>
+                                            <h3>GitHub を連携する</h3>
+                                            <p>リポジトリの所有者確認と採点に使用します。</p>
+                                            <button
+                                                className="button"
+                                                type="button"
+                                                disabled={account.busy}
+                                                onClick={account.linkGithub}
+                                            >
+                                                GitHub を連携
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <p>
+                                                GitHub 連携済み · <strong>@{account.profile.github_login}</strong>
+                                            </p>
+                                            {!account.profile.repo_name && (
+                                                <>
+                                                    <h3>演習リポジトリを作成・登録</h3>
+                                                    <p>GitHub でご自身が所有する公開リポジトリを作成してください。</p>
+                                                    <a
+                                                        className="button"
+                                                        href={'https://github.com/' + template + '/generate'}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                    >
+                                                        THREAD から作成する{' '}
+                                                        <ExternalLink size={15} aria-hidden="true" />
+                                                    </a>
+                                                    <RepositoryForm
+                                                        login={account.profile.github_login}
+                                                        busy={account.busy}
+                                                        action={account.action}
+                                                    />
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                    {readyToStart && (
+                                        <div>
+                                            <h3>自分の PC にクローンして起動</h3>
+                                            <pre>
+                                                <code>{cloneCommand}</code>
+                                            </pre>
+                                            <Copy value={cloneCommand} label="クローンコマンドをコピー" />
+                                            <fieldset>
+                                                <legend>使っている OS</legend>
+                                                <label>
+                                                    <input
+                                                        type="radio"
+                                                        name="setup-os"
+                                                        checked={os === 'windows'}
+                                                        onChange={() => setOs('windows')}
+                                                    />{' '}
+                                                    Windows（WSL 2 / Ubuntu）
+                                                </label>{' '}
+                                                <label>
+                                                    <input
+                                                        type="radio"
+                                                        name="setup-os"
+                                                        checked={os === 'macos'}
+                                                        onChange={() => setOs('macos')}
+                                                    />{' '}
+                                                    macOS
+                                                </label>
+                                            </fieldset>
+                                            <a
+                                                className="button"
+                                                href={
+                                                    setupReadme.split('#')[0] +
+                                                    '#' +
+                                                    (os === 'windows' ? 'windows' : 'macos')
                                                 }
-                                            />
-                                            {label}
-                                        </label>
-                                        <a href={'http://' + host + '/'} target="_blank" rel="noopener noreferrer">
-                                            {host} <ExternalLink size={13} aria-hidden="true" />
-                                        </a>
-                                    </div>
-                                ))}
-                            </fieldset>
-                            <SetupHelp />
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                {os === 'windows' ? 'Windows の起動手順' : 'macOS の起動手順'}{' '}
+                                                <ExternalLink size={15} aria-hidden="true" />
+                                            </a>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {!account && (
+                                <a className="button" href={setupReadme} target="_blank" rel="noopener noreferrer">
+                                    THREAD の初回セットアップ <ExternalLink size={15} aria-hidden="true" />
+                                </a>
+                            )}
+                            {readyToStart && (
+                                <>
+                                    <fieldset disabled={account?.busy}>
+                                        <legend>起動確認</legend>
+                                        {setupChecks.map(({ label, host }) => (
+                                            <div className="scene-setup-check" key={host}>
+                                                <label>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={openedPages.includes(host)}
+                                                        onChange={({ target: { checked } }) =>
+                                                            void move({
+                                                                openedPages: checked
+                                                                    ? [...openedPages, host]
+                                                                    : openedPages.filter((page) => page !== host)
+                                                            })
+                                                        }
+                                                    />
+                                                    {label}
+                                                </label>
+                                                <a
+                                                    href={'http://' + host + '/'}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                >
+                                                    {host} <ExternalLink size={13} aria-hidden="true" />
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </fieldset>
+                                    <SetupHelp />
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
@@ -310,7 +458,10 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                     {menuItem && (
                         <button
                             className="button"
-                            onClick={() => (menuIndex === 0 ? setScene('project') : setMenuIndex(menuIndex - 1))}
+                            disabled={account?.busy}
+                            onClick={() =>
+                                void move(menuIndex === 0 ? { scene: 'project' } : { menuIndex: menuIndex - 1 })
+                            }
                         >
                             <ArrowLeft size={16} /> 戻る
                         </button>
@@ -318,7 +469,12 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket }: FirstDayProps) {
                     <button
                         className="button primary"
                         onClick={typing ? finish : advance}
-                        disabled={!typing && scene === 'setup' && openedPages.length !== setupChecks.length}
+                        disabled={
+                            account?.busy ||
+                            (!typing &&
+                                scene === 'setup' &&
+                                (!readyToStart || openedPages.length !== setupChecks.length))
+                        }
                     >
                         {typing ? '全文を読む' : next} <ArrowRight size={16} />
                     </button>

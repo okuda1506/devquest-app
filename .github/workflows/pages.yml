@@ -21,6 +21,7 @@ jobs:
         env:
             VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+            VITE_GOOGLE_ONBOARDING: ${{ vars.VITE_GOOGLE_ONBOARDING }}
         steps:
             - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
               with:

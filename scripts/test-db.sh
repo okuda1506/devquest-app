@@ -9,7 +9,7 @@ for attempt in {1..30}; do
     fi
     sleep 1
 done
-for file in supabase/tests/bootstrap.sql supabase/migrations/*.sql supabase/tests/progress.sql; do
+for file in supabase/tests/bootstrap.sql supabase/migrations/*.sql supabase/tests/progress.sql supabase/tests/onboarding.sql; do
     docker exec -i "$container" psql -U postgres --set=ON_ERROR_STOP=1 --quiet < "$file"
 done
 

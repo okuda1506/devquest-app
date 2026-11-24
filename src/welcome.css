@@ -1,0 +1,159 @@
+.welcome {
+    min-height: 100vh;
+}
+.welcome-container {
+    width: min(1120px, calc(100% - 2 * clamp(16px, 5vw, 56px)));
+    margin-inline: auto;
+}
+.welcome-header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+}
+.welcome-header-content,
+.welcome-brand,
+.welcome-header nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.welcome-header-content {
+    min-height: 66px;
+    justify-content: space-between;
+}
+.welcome-brand {
+    font-weight: 700;
+    font-size: 19px;
+}
+.welcome-hero,
+.welcome-path {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(24px, 5vw, 64px);
+}
+.welcome-hero {
+    padding-block: clamp(42px, 8vw, 100px);
+}
+.welcome-hero h1 {
+    font-size: clamp(29px, 4vw, 50px);
+    line-height: 1.25;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+    word-break: auto-phrase;
+}
+.welcome-hero p,
+.welcome-section p,
+.welcome-auth p {
+    margin-top: 14px;
+    line-height: 1.75;
+    color: var(--muted);
+}
+.welcome-hero .button {
+    margin-top: 23px;
+    padding: 10px 16px;
+}
+.welcome-note {
+    font-size: 13px;
+}
+.welcome-figure {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+.welcome-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel);
+}
+.welcome-figure figcaption {
+    margin-top: 7px;
+}
+.welcome-section {
+    padding-block: 34px;
+    border-top: 1px solid var(--line);
+}
+.welcome-section h2 {
+    font-size: clamp(20px, 2vw, 27px);
+}
+.welcome-path ol {
+    margin: 14px 0 0;
+    padding-inline-start: 26px;
+}
+.welcome-path li {
+    padding: 10px 0 10px 6px;
+}
+.welcome-path li + li {
+    border-top: 1px solid var(--line);
+}
+.welcome-path li p {
+    margin-top: 4px;
+}
+.welcome-team > div {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+.welcome-team .member-avatar {
+    border-radius: 8px;
+}
+.welcome-team p {
+    font-size: 13px;
+}
+.welcome-auth {
+    width: min(100%, 420px);
+    margin: clamp(30px, 8vh, 90px) auto;
+    padding: clamp(20px, 4vw, 34px);
+}
+.welcome-auth > .button,
+.welcome-auth > .sub-link,
+.welcome-error {
+    margin-top: 16px;
+}
+.welcome-auth > .sub-link {
+    display: block;
+}
+.welcome-auth p.feedback.error {
+    color: var(--red);
+}
+.signout-button {
+    white-space: nowrap;
+}
+.first-day-start {
+    max-width: 640px;
+    margin-inline: auto;
+}
+.first-day .onboarding-setup {
+    display: grid;
+    gap: 14px;
+}
+.onboarding-setup .repo-field {
+    margin-bottom: 8px;
+}
+.onboarding-setup pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin: 6px 0;
+}
+@media (max-width: 720px) {
+    .welcome-hero,
+    .welcome-path {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .welcome-header-content,
+    .welcome-header nav {
+        gap: 5px;
+    }
+    .welcome-header nav .button {
+        padding-inline: 7px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 420px) {
+    .account > span {
+        display: none;
+    }
+}
