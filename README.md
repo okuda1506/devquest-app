@@ -20,6 +20,25 @@ THREAD の開発チームに途中参画し、改修依頼を受け取って自�
 
 ![DevQuest の認証・採点と THREAD の EC サイト・店舗管理・API・DB の構成図](docs/system-architecture.png)
 
+### 本番環境の構成（サーバーレス）
+
+DevQuest 本体は、専用のバックエンドサーバーを常時稼働させず、**GitHub Pages と Supabase を組み合わせたサーバーレス構成**で公開しています。
+
+| サービス | 担当する役割 |
+| --- | --- |
+| **GitHub Pages** | React + TypeScript + Vite でビルドしたフロントエンド（HTML・CSS・JavaScript）を配信 |
+| **`github.io`** | DevQuest の公開 URL を提供するドメイン（`https://okuda1506.github.io/devquest-app/`） |
+| **Supabase Auth** | Google・GitHub ログインと認証セッションを管理 |
+| **Supabase Edge Functions** | サーバー側の API 処理。GitHub API で採点結果や PR マージ状況を確認し、課題完了・次の課題解放を制御 |
+| **Supabase PostgreSQL** | 学習者情報、課題進捗、提出履歴、通知などのデータを保存 |
+| **GitHub Actions** | DevQuest のテスト・GitHub Pages へのデプロイ、学習者の THREAD リポジトリでの課題自動採点を実行 |
+
+GitHub Pages は静的ファイルの配信を担当し、React アプリ自体は学習者のブラウザで動作します。採点結果の確認などのサーバー処理は Supabase Edge Functions が担当します。
+
+**採点結果の確認例：** 学習者が THREAD の改修コードを push → GitHub Actions が採点 → DevQuest の画面から Supabase Edge Functions を呼び出す → Edge Functions が GitHub API の結果を検証 → Supabase PostgreSQL に進捗を保存 → DevQuest に結果を表示
+
+なお、**THREAD は DevQuest 本体とは別の演習用システム**です。THREAD の EC サイト・管理画面（React）、API（NestJS）、DB（PostgreSQL）は学習者のローカル環境で起動し、Supabase の DB には THREAD の商品・在庫・注文データを保存しません。
+
 ## ローカル起動
 
 Node.js 22.12 以上または 24 と npm を使います。
