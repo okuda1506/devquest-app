@@ -5,6 +5,7 @@ import {
     inspectGrade,
     quest40Baseline,
     operationsBaseline,
+    architectureBaseline,
     readCriteria,
     repoName,
     verifyProtection,
@@ -285,4 +286,42 @@ test('保存済みの実行と再試行番号で完了条件の成否を取得�
         'passed',
         'unavailable'
     ]);
+});
+
+test('v4 は移動した Seed・計測・テストを照合し v3 の保護範囲を維持する', async () => {
+    const legacy = { ...workflow, sha: changed };
+    const files = [
+        { ...workflow, path: 'api/prisma/seeds/development.seed.ts' },
+        { ...workflow, path: 'api/prisma/scripts/benchmark-sales.ts' },
+        { ...workflow, path: 'api/src/modules/orders/orders.service.spec.ts' }
+    ];
+    const fixture =
+        (candidate: typeof files): Github =>
+        async <T>(path: string) => {
+            if (path.includes('/git/commits/')) return { tree: { sha: path.split('/').at(-1) } } as T;
+            const tree = path.includes(template)
+                ? path.includes(architectureBaseline)
+                    ? [workflow, ...files]
+                    : [legacy]
+                : candidate;
+            return { tree, truncated: false } as T;
+        };
+    const supported = [architectureBaseline, operationsBaseline];
+    await expect(verifyProtection(fixture([workflow, ...files]), supported, repo.full_name, sha)).resolves.toBe(
+        architectureBaseline
+    );
+    for (const file of files) {
+        const modified = [workflow, ...files.map((item) => (item === file ? { ...item, sha: changed } : item))];
+        await expect(verifyProtection(fixture(modified), supported, repo.full_name, sha)).rejects.toThrow(
+            /保護ファイル/
+        );
+    }
+    await expect(verifyProtection(fixture([legacy, files[2]]), supported, repo.full_name, sha)).resolves.toBe(
+        operationsBaseline
+    );
+
+    const added = getTask('DEV-143')!;
+    await expect(
+        inspectGrade(github({ branch: added.branch }), [architectureBaseline], repo, added, merge)
+    ).resolves.toMatchObject({ result: 'passed' });
 });

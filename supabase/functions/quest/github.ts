@@ -52,7 +52,9 @@ const shaPattern = /^[0-9a-f]{40}$/;
 const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/;
 export const quest40Baseline = '664ab6ef8aafcb3d7e512aac0b319ed60b18f7dd'; // thread-quests-v2
 export const operationsBaseline = 'fa1e751be967d99eab0a02620b6315aad1da95aa'; // thread-quests-v3
+export const architectureBaseline = 'af05b18c0007aa78cb7809a64b71c063b8a74958'; // thread-quests-v4
 export const templateBaselines = [
+    architectureBaseline,
     operationsBaseline,
     quest40Baseline,
     'c39fe6597bf0929fa651596a53f3db636d71a852',
@@ -90,11 +92,13 @@ const protectedFiles = new Set([
 const workflow = '.github/workflows/grade.yml';
 
 const repoPath = (name: string) => '/repos/' + name;
-const isProtected = (path: string) =>
+const isProtected = (path: string, architecture: boolean) =>
     protectedFiles.has(path) ||
     path.startsWith('.github/workflows/') ||
     path.startsWith('grading/') ||
-    /\.test\.tsx?$/.test(path);
+    /\.test\.tsx?$/.test(path) ||
+    (architecture &&
+        (path.startsWith('api/prisma/seeds/') || path.startsWith('api/prisma/scripts/') || /\.spec\.tsx?$/.test(path)));
 
 export function repoName(value: unknown) {
     if (typeof value !== 'string') throw new QuestError('所有者名/リポジトリ名を入力してください。');
@@ -129,15 +133,19 @@ export function verifyRepo(repo: Repo, githubId: number, id?: number) {
 
 type TreeItem = { path: string; sha: string; mode: string; type: string };
 
-async function fingerprint(github: Github, repo: string, commit: string) {
+async function readTree(github: Github, repo: string, commit: string) {
     const result = await github<{ tree: { sha: string } }>(repoPath(repo) + '/git/commits/' + commit);
     const tree = await github<{ tree: TreeItem[]; truncated: boolean }>(
         repoPath(repo) + '/git/trees/' + result.tree.sha + '?recursive=1'
     );
     if (tree.truncated) throw new QuestError('リポジトリが大きすぎるため採点ファイルを照合できません。');
+    return tree.tree;
+}
+
+function fingerprint(tree: TreeItem[], architecture: boolean) {
     return JSON.stringify(
-        tree.tree
-            .filter((item) => item.type !== 'tree' && isProtected(item.path))
+        tree
+            .filter((item) => item.type !== 'tree' && isProtected(item.path, architecture))
             .sort((a, b) => a.path.localeCompare(b.path))
             .map(({ path, mode, sha }) => [path, mode, sha])
     );
@@ -148,11 +156,13 @@ export async function verifyProtection(github: Github, canonical: readonly strin
         throw new QuestError('採点元の設定が正しくありません。', 503);
     }
     if (!shaPattern.test(sha)) throw new QuestError('コミットを確認できません。');
-    const candidate = await fingerprint(github, repo, sha);
-    if (candidate.includes(JSON.stringify(workflow))) {
-        // 保護ファイル一式が同じ版と完全に一致する場合だけ、既存・移行後の提出を受け入れる。
+    const candidate = await readTree(github, repo, sha);
+    if (candidate.some(({ path }) => path === workflow)) {
+        // 旧版は当時の保護範囲を使い 新構成では移動済みの Seed・計測・テストも照合する
         for (const commit of new Set(canonical)) {
-            if (candidate === (await fingerprint(github, template, commit))) return commit;
+            const architecture = commit === architectureBaseline;
+            const reference = await readTree(github, template, commit);
+            if (fingerprint(candidate, architecture) === fingerprint(reference, architecture)) return commit;
         }
     }
     throw new QuestError('採点対象外の保護ファイルに変更があります。元の状態に戻してください。');
@@ -286,10 +296,13 @@ export async function inspectGrade(
     }
     const baseline = await verifyProtection(github, canonical, repo.full_name, sha);
     const number = Number(task.id.slice(4));
-    if (number >= 141 && baseline !== operationsBaseline) {
-        throw new QuestError('DEV-141 以降は THREAD README の手順に沿って採点と演習コードを v3 に更新してください。');
+    const operationsSupported = baseline === operationsBaseline || baseline === architectureBaseline;
+    if (number >= 141 && !operationsSupported) {
+        throw new QuestError(
+            'DEV-141 以降は THREAD README の手順に沿って採点と演習コードを v3 または v4 に更新してください。'
+        );
     }
-    if (number >= 105 && baseline !== quest40Baseline && baseline !== operationsBaseline) {
+    if (number >= 105 && baseline !== quest40Baseline && !operationsSupported) {
         throw new QuestError(
             '追加課題を採点するには、THREAD README の手順で採点ファイルを thread-quests-v2 に更新してください。'
         );
