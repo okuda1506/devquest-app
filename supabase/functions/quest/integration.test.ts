@@ -7,6 +7,7 @@ import {
     operationsBaseline,
     architectureBaseline,
     catalogBaseline,
+    accountModelBaseline,
     readCriteria,
     repoName,
     verifyProtection,
@@ -289,7 +290,7 @@ test('保存済みの実行と再試行番号で完了条件の成否を取得�
     ]);
 });
 
-test.each([architectureBaseline, catalogBaseline])('採点基準 %s は移動した Seed・計測・テストを照合し v3 の保護範囲を維持する', async (baseline) => {
+test.each([architectureBaseline, catalogBaseline, accountModelBaseline])('採点基準 %s は移動した Seed・計測・テストを照合し v3 の保護範囲を維持する', async (baseline) => {
     const legacy = { ...workflow, sha: changed };
     const files = [
         { ...workflow, path: 'api/prisma/seeds/development.seed.ts' },
