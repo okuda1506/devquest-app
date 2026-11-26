@@ -56,7 +56,9 @@ export const architectureBaseline = 'af05b18c0007aa78cb7809a64b71c063b8a74958'; 
 export const catalogBaseline = '404e5a42c0284c45d9cbecb6d7c68f88187ecbd8'; // thread-quests-v5
 export const expandedCatalogBaseline = 'dfef0c460bfd59b96b1cfb9791d412d17551086f'; // thread-quests-v6
 export const accountModelBaseline = '1eb7d193c1828f35966e447c8c4e426fe38b9cfd'; // thread-quests-v7
+export const numericShopBaseline = '6719113a60ae4489410cd7c2b948bbdc7507e564'; // thread-quests-v8
 const architectureBaselines: readonly string[] = [
+    numericShopBaseline,
     accountModelBaseline,
     expandedCatalogBaseline,
     catalogBaseline,
