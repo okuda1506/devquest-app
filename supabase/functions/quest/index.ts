@@ -1,5 +1,6 @@
 import { authenticate, questDatabase } from './auth.ts';
 import { exchangeOAuth } from './oauth.ts';
+import { privacyPolicyVersion, signupChallenge } from './privacy.ts';
 import { QuestError } from './auth-errors.ts';
 import { getTask, tasks } from './catalog.ts';
 import { normalizeDisplayName, readFirstDayCheckpoint } from './onboarding.ts';
@@ -62,6 +63,7 @@ Deno.serve(async (request) => {
                 'grade',
                 'register',
                 'exchange',
+                'signup_consent',
                 'home',
                 'criteria',
                 'read',
@@ -72,11 +74,59 @@ Deno.serve(async (request) => {
         )
             log.action = input.action;
 
+        if (input.action === 'signup_consent') {
+            if (
+                input.accepted !== true ||
+                input.version !== privacyPolicyVersion ||
+                typeof input.challenge !== 'string' ||
+                !/^[A-Za-z0-9_-]{43}$/.test(input.challenge)
+            ) {
+                throw new QuestError('プライバシーポリシーを確認して同意してください。');
+            }
+            checked(
+                await questDatabase(env).rpc('begin_signup_consent', {
+                    p_challenge: input.challenge,
+                    p_version: privacyPolicyVersion
+                })
+            );
+            return Response.json({ accepted: true }, { headers: cors });
+        }
         if (input.action === 'exchange') {
-            return Response.json(await exchangeOAuth(input.code, input.verifier, env), { headers: cors });
+            const tokens = await exchangeOAuth(input.code, input.verifier, env);
+            const { db, userId, githubId, login, googleLinked, displayName } = await authenticate(
+                new Request(request.url, {
+                    headers: { Authorization: 'Bearer ' + tokens.access_token }
+                }),
+                env
+            );
+            if (googleLinked) {
+                const existing = await db.from('learners').select('user_id').eq('user_id', userId).maybeSingle();
+                checked(existing);
+                if (!existing.data) {
+                    const consent = await db.rpc('finish_signup_consent', {
+                        p_challenge: await signupChallenge(input.verifier),
+                        p_user: userId,
+                        p_github: githubId,
+                        p_login: login,
+                        p_display: displayName
+                    });
+                    if (consent.error?.code === '23505')
+                        throw new QuestError('GitHub の連携先を確認してください。', 409);
+                    checked(consent);
+                    if (!consent.data)
+                        throw new QuestError('新規登録画面でプライバシーポリシーに同意してから登録してください。', 403);
+                }
+            }
+            return Response.json(tokens, { headers: cors });
         }
         const { db, userId, githubId, login, googleLinked, displayName } = await authenticate(request, env);
         log.learnerId = userId;
+        if (googleLinked) {
+            const existing = await db.from('learners').select('user_id').eq('user_id', userId).maybeSingle();
+            checked(existing);
+            if (!existing.data)
+                throw new QuestError('新規登録画面でプライバシーポリシーに同意してから登録してください。', 403);
+        }
         const synced = await db.rpc('sync_learner', {
             p_user: userId,
             p_github: githubId,

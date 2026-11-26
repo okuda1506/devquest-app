@@ -4,6 +4,7 @@ import {
     GithubError,
     inspectGrade,
     quest40Baseline,
+    operationsBaseline,
     readCriteria,
     repoName,
     verifyProtection,
@@ -105,11 +106,11 @@ function github({
 }
 
 describe('演習の判定', () => {
-    test('各チャプターに10課題があり、すべての課題を順番に解放する', () => {
-        expect(tasks).toHaveLength(40);
-        expect(new Set(tasks.map((item) => item.id)).size).toBe(40);
+    test('既存チャプターの順番を保って新しい課題を解放する', () => {
+        expect(tasks).toHaveLength(43);
+        expect(new Set(tasks.map((item) => item.id)).size).toBe(43);
         expect([0, 1, 2, 3].map((chapter) => tasks.filter((task) => task.chapter === chapter).length)).toEqual([
-            10, 10, 10, 10
+            10, 10, 10, 13
         ]);
         expect(tasks.every((item, index) => item.available && item.previous === (tasks[index - 1]?.id ?? null))).toBe(
             true
@@ -152,6 +153,20 @@ describe('演習の判定', () => {
         expect(
             await inspectGrade(github({ conclusion: 'failure', merged: true }), canonical, repo, task, null)
         ).toMatchObject({ result: 'failed', merge: null });
+    });
+
+    test('保守課題は v3 の採点版で合格とマージを確認する', async () => {
+        const added = getTask('DEV-141')!;
+        const submitted = github({ branch: added.branch, merged: true });
+        await expect(inspectGrade(submitted, [quest40Baseline], repo, added, merge)).rejects.toThrow(/v3/);
+        await expect(inspectGrade(submitted, [operationsBaseline], repo, added, merge)).resolves.toMatchObject({
+            result: 'passed',
+            merge
+        });
+        const older = getTask('DEV-105')!;
+        await expect(
+            inspectGrade(github({ branch: older.branch }), [operationsBaseline], repo, older, merge)
+        ).resolves.toMatchObject({ result: 'passed' });
     });
 
     test('追加課題の採点には40課題版のワークフローが必要', async () => {

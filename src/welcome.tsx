@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { privacyPolicyVersion } from '../supabase/functions/quest/privacy';
 import { ArrowRight, Code2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { WelcomeLanding } from './welcome-landing';
@@ -11,12 +13,13 @@ export function Welcome({
     signingIn
 }: {
     page?: 'signin' | 'signup';
-    login: () => void;
+    login: (consentVersion?: string) => void;
     error: string;
     disabled: boolean;
     signingIn: boolean;
 }) {
     const signup = page === 'signup';
+    const [accepted, setAccepted] = useState(false);
     return (
         <div className={page || error ? 'welcome' : 'welcome welcome-cover'}>
             <header className="welcome-header">
@@ -56,7 +59,24 @@ export function Welcome({
                                 この環境では認証が設定されていません。
                             </p>
                         )}
-                        <button className="button primary" onClick={login} disabled={disabled || signingIn}>
+                        {signup && (
+                            <div className="signup-consent">
+                                <Link to="/privacy">プライバシーポリシーを読む</Link>
+                                <label>
+                                    <input
+                                        type="checkbox"
+                                        checked={accepted}
+                                        onChange={(event) => setAccepted(event.target.checked)}
+                                    />
+                                    プライバシーポリシーに同意する
+                                </label>
+                            </div>
+                        )}
+                        <button
+                            className="button primary"
+                            onClick={() => login(signup ? privacyPolicyVersion : undefined)}
+                            disabled={disabled || signingIn || (signup && !accepted)}
+                        >
                             {signingIn ? 'Google に接続中…' : signup ? 'Googleで登録' : 'Googleでサインイン'}{' '}
                             <ArrowRight size={17} aria-hidden="true" />
                         </button>

@@ -915,6 +915,84 @@ const sequence: (Ticket & { id: string })[] = [
             '販売対象から外す処理を物理削除と分けると、過去の注文と参照整合性を維持できる。'
         ],
         reflection: '販売対象から外す処理を物理削除と分けると、過去の注文と参照整合性を維持できる。'
+    },
+    {
+        id: 'DEV-141',
+        title: '売上のない日のレポートエラーを調査する',
+        author: 'ops',
+        category: 'ログ調査・保守',
+        level: '上級',
+        priority: '高',
+        description: '店舗管理者から、注文がない日の日次売上だけ開けないと連絡がありました。管理者で Swagger UI を開き、日付を指定して調べてください。',
+        steps: [
+            'GET /api/admin/reports/daily-sales に注文のない UTC 日付を指定して 500 を再現する。',
+            '応答の X-Thread-Request-Id を使い、API ターミナルで reports.daily_sales と http.response を照合する。',
+            '集計結果を確認して修正し、売上ゼロの日と注文がある日を再確認する。'
+        ],
+        criteria: [
+            '有効な日付に注文がないときは 200 で day、orders: 0、total: 0 を返す。',
+            '注文がある日の注文数と合計は従来どおり返す。',
+            '不正な日付を 400 で拒否し、顧客にはレポートを返さない。'
+        ],
+        tags: ['NestJS', 'Prisma', 'ログ調査'],
+        hints: [
+            'リクエスト ID でエラーと応答を絞り込む。',
+            '売上がない日とある日で Prisma の集計結果を比較する。',
+            '集計対象がないときの合計値をレスポンス用の値に変換する。'
+        ],
+        reflection: '注文のない日は正常な業務状態です。集計値の欠損を想定して API の契約を保ちます。'
+    },
+    {
+        id: 'DEV-142',
+        title: '午前0時の注文が二重集計される原因を調べる',
+        author: 'ops',
+        category: 'ログ調査・保守',
+        level: '上級',
+        priority: '高',
+        description: '日次売上で午前0時の注文が2日分に計上されています。API のリクエストログとテストの固定データを使って調査してください。',
+        steps: [
+            'npm run grade -- task/DEV-142 2 を実行し、日付が変わる瞬間の注文を含むケースを再現する。',
+            'THREAD_LOG_LEVEL=debug でリクエストと DB 処理を照合し、日付範囲の両端が集計に含まれるか確認する。',
+            '時刻の境界条件を修正し、前日と翌日の集計も確認する。'
+        ],
+        criteria: [
+            '前日の終了直前と翌日の開始時刻の注文は各日の集計に含める。',
+            '当日の開始時刻と終了直前を含め、翌日0時ちょうどは当日から除外する。',
+            '翌日0時ちょうどの注文は翌日の集計に一度だけ含める。'
+        ],
+        tags: ['PostgreSQL', 'Prisma', '境界値'],
+        hints: [
+            '同じ注文がどのリクエストのレスポンスに含まれるか調べる。',
+            '時刻範囲を指定する Prisma の比較演算子を確認する。',
+            '次の日の開始時刻を集計に含めると、翌日と範囲が重なる。'
+        ],
+        reflection: '集計範囲の開始を含め、次の開始を除外すると、隣接する日付の重複を防げます。'
+    },
+    {
+        id: 'DEV-143',
+        title: '商品別売上の N+1 を減らす',
+        author: 'ops',
+        category: 'パフォーマンス改善',
+        level: '上級',
+        priority: '通常',
+        description: '商品数が増えてから商品別売上レポートが遅くなりました。同じカテゴリーで改善前後の応答時間と DB への問い合わせ回数を比べてください。',
+        steps: [
+            'THREAD の README に沿って大量 Seed を投入し、npm run benchmark:sales で基準を計測する。',
+            '各リクエスト ID の db.query を数え、商品数が増えたときに増える処理を特定する。',
+            '商品別の販売点数を維持したまま問い合わせを減らし、同じ条件で再計測する。'
+        ],
+        criteria: [
+            '対象の商品を ID 順に返し、過去の注文明細から販売点数を集計する。未販売の商品は0点で返す。',
+            '商品が25件以上あるテストで、認証を含めて DB への問い合わせを4回以下にする。',
+            'カテゴリーで絞り込み、不正な値と運営権限のないアクセスを拒否する。'
+        ],
+        tags: ['Prisma', 'SQL 集計', '性能計測'],
+        hints: [
+            'db.query をリクエスト ID でまとめて問い合わせ回数を数える。',
+            '注文明細の集計が商品ごとに繰り返されていないか確認する。',
+            '必要な商品だけを対象に集計し、販売点数がまだない場合も扱う。'
+        ],
+        reflection: 'CI では機能の正確さと DB 問い合わせ回数を検証します。応答時間は同じ環境の改善前後で比較します。'
     }
 ];
 
@@ -922,7 +1000,7 @@ export const tasks = sequence.map((entry, index) => ({
     ...entry,
     branch: 'task/' + entry.id,
     requester: team[entry.author],
-    chapter: Math.floor(index / 10),
+    chapter: Math.min(Math.floor(index / 10), chapters.length - 1),
     available: true,
     previous: sequence[index - 1]?.id ?? null
 }));

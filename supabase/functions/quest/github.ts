@@ -51,7 +51,9 @@ export type Repo = {
 const shaPattern = /^[0-9a-f]{40}$/;
 const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}\/[a-zA-Z0-9_.-]{1,100}$/;
 export const quest40Baseline = '664ab6ef8aafcb3d7e512aac0b319ed60b18f7dd'; // thread-quests-v2
+export const operationsBaseline = 'fa1e751be967d99eab0a02620b6315aad1da95aa'; // thread-quests-v3
 export const templateBaselines = [
+    operationsBaseline,
     quest40Baseline,
     'c39fe6597bf0929fa651596a53f3db636d71a852',
     '8308c7e7f65f64e90f265cb0e40e42157ed1b752',
@@ -71,6 +73,8 @@ const protectedFiles = new Set([
     'api/package.json',
     'api/prisma.config.ts',
     'api/prisma/seed.ts',
+    'api/prisma/seed-large.ts',
+    'api/prisma/benchmark-sales.ts',
     'api/jest.config.cjs',
     'api/tsconfig.json',
     'api/tsconfig.build.json',
@@ -113,7 +117,8 @@ export function verifyRepo(repo: Repo, githubId: number, id?: number) {
     }
     if (repo.private) throw new QuestError('GitHub の Settings で演習用リポジトリを Public（公開）にしてください。');
     if (repo.archived) throw new QuestError('演習用リポジトリのアーカイブを解除してください。');
-    if (repo.default_branch !== 'main') throw new QuestError('GitHub の Settings で既定ブランチを main にしてください。');
+    if (repo.default_branch !== 'main')
+        throw new QuestError('GitHub の Settings で既定ブランチを main にしてください。');
     if (
         repo.full_name.toLowerCase() === template ||
         (repo.template_repository && repo.template_repository.full_name.toLowerCase() !== template)
@@ -280,7 +285,11 @@ export async function inspectGrade(
         throw new QuestError('最新の main を作業ブランチに取り込んでから push してください。');
     }
     const baseline = await verifyProtection(github, canonical, repo.full_name, sha);
-    if (Number(task.id.slice(4)) >= 105 && baseline !== quest40Baseline) {
+    const number = Number(task.id.slice(4));
+    if (number >= 141 && baseline !== operationsBaseline) {
+        throw new QuestError('DEV-141 以降は THREAD README の手順に沿って採点と演習コードを v3 に更新してください。');
+    }
+    if (number >= 105 && baseline !== quest40Baseline && baseline !== operationsBaseline) {
         throw new QuestError(
             '追加課題を採点するには、THREAD README の手順で採点ファイルを thread-quests-v2 に更新してください。'
         );
