@@ -6,6 +6,7 @@ import {
     quest40Baseline,
     operationsBaseline,
     architectureBaseline,
+    catalogBaseline,
     readCriteria,
     repoName,
     verifyProtection,
@@ -288,7 +289,7 @@ test('保存済みの実行と再試行番号で完了条件の成否を取得�
     ]);
 });
 
-test('v4 は移動した Seed・計測・テストを照合し v3 の保護範囲を維持する', async () => {
+test.each([architectureBaseline, catalogBaseline])('採点基準 %s は移動した Seed・計測・テストを照合し v3 の保護範囲を維持する', async (baseline) => {
     const legacy = { ...workflow, sha: changed };
     const files = [
         { ...workflow, path: 'api/prisma/seeds/development.seed.ts' },
@@ -300,15 +301,15 @@ test('v4 は移動した Seed・計測・テストを照合し v3 の保護範�
         async <T>(path: string) => {
             if (path.includes('/git/commits/')) return { tree: { sha: path.split('/').at(-1) } } as T;
             const tree = path.includes(template)
-                ? path.includes(architectureBaseline)
+                ? path.includes(baseline)
                     ? [workflow, ...files]
                     : [legacy]
                 : candidate;
             return { tree, truncated: false } as T;
         };
-    const supported = [architectureBaseline, operationsBaseline];
+    const supported = [baseline, operationsBaseline];
     await expect(verifyProtection(fixture([workflow, ...files]), supported, repo.full_name, sha)).resolves.toBe(
-        architectureBaseline
+        baseline
     );
     for (const file of files) {
         const modified = [workflow, ...files.map((item) => (item === file ? { ...item, sha: changed } : item))];
@@ -322,6 +323,6 @@ test('v4 は移動した Seed・計測・テストを照合し v3 の保護範�
 
     const added = getTask('DEV-143')!;
     await expect(
-        inspectGrade(github({ branch: added.branch }), [architectureBaseline], repo, added, merge)
+        inspectGrade(github({ branch: added.branch }), [baseline], repo, added, merge)
     ).resolves.toMatchObject({ result: 'passed' });
 });

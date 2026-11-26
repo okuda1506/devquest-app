@@ -93,6 +93,7 @@ Google の新規登録時は [プライバシーポリシー](https://okuda1506.
 - Edge Function は THREAD の分離前、`thread-split-v1`、`thread-checkout-v1` の各版の保護ファイル一式を認識します。分離版から演習中のリポジトリも、その版のまま提出できます。[購入手続きを取り込む場合の移行手順](https://github.com/okuda1506/devquest-fashion-template#旧版から演習を進めている場合)
 - 採点基準を更新するときは、Actions の基準タグと Edge Function の承認済みコミットを計画的に更新します。追加の基準は Edge Function の `THREAD_TEMPLATE_SHA` に公開済みの40桁コミット SHA をコンマ区切りで指定できます。課題追加時はカタログ・DB の解放順・ワークフロー・回帰テストを揃えます。
 - DEV-141〜143 の公開時は先に THREAD の `thread-quests-v3` を公開し、DevQuest の `supabase db push` と `supabase functions deploy quest` を順に反映します。DEV-140 完了済みの場合は DEV-141 を割り当てます。既存の演習リポジトリで続ける場合は [THREAD の採点更新手順](https://github.com/okuda1506/devquest-fashion-template#採点の更新すでに演習中の場合) に沿って v3 の変更を取り込みます。
+- THREAD の商品拡充版（`thread-quests-v5`）をテンプレートの `main` に反映する前に、このリポジトリの `supabase functions deploy quest` を実行します。v4 以前の演習リポジトリは作成時の採点基準で継続できます。
 - Supabase の無料プロジェクトが一時停止した場合は、管理画面で再開して Edge Function と DB の疎通を確認します。個人データを含むため、バックアップはアクセスを制限した場所に保管し、復元後にリポジトリ ID、完了 SHA、通知件数を確認します。採点の再確認は同じ提出・通知を重複登録しません。
 
 THREAD の構成刷新版は `thread-quests-v4` 採点基準を使います。旧版で作成した演習リポジトリは、対応する従来の採点基準で続けられます。本番で構成刷新版を使うには、`quest` Edge Function も同じ版に反映してください。[THREADのコード構成](https://github.com/okuda1506/devquest-fashion-template/blob/main/docs/code-architecture.md)
