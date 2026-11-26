@@ -4,14 +4,30 @@ insert into auth.users values
     ('00000000-0000-0000-0000-000000000011'),
     ('00000000-0000-0000-0000-000000000012');
 
+insert into auth.identities values ('00000000-0000-0000-0000-000000000011', 'google');
+
 set local role service_role;
 do $$
 declare
     learner constant uuid := '00000000-0000-0000-0000-000000000011';
     second_user constant uuid := '00000000-0000-0000-0000-000000000012';
 begin
-    if not public.sync_learner(learner, null, null, 'Google 利用者') then
-        raise exception 'GitHub 未連携で初回プロフィールを保存できない';
+    if public.sync_learner(learner, null, null, 'Google 利用者') then
+        raise exception '同意なしで Google プロフィールを保存した';
+    end if;
+    if public.finish_signup_consent(repeat('x', 43), learner, null, null, 'Google 利用者') then
+        raise exception '同意がない登録を許可した';
+    end if;
+    perform public.begin_signup_consent(repeat('x', 43), '2026-11-26');
+    if not public.finish_signup_consent(repeat('x', 43), learner, null, null, 'Google 利用者') then
+        raise exception '同意済みの初回プロフィールを保存できない';
+    end if;
+    if public.finish_signup_consent(repeat('x', 43), learner, null, null, 'Google 利用者') then
+        raise exception '同意の再利用を許可した';
+    end if;
+    if not exists (select 1 from public.learners where user_id = learner
+        and privacy_policy_version = '2026-11-26' and privacy_consented_at is not null) then
+        raise exception '同意日時と対象バージョンを記録できない';
     end if;
     if not public.sync_learner(learner, 88, 'example-learner', 'OAuth の表示名') then
         raise exception '同じ学習者 ID に GitHub を連携できない';

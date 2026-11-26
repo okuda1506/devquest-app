@@ -46,7 +46,7 @@ declare
     task record;
     state text;
 begin
-    if (select count(*) from public.quest_order) <> 40 then raise exception '課題数が40件ではない'; end if;
+    if (select count(*) from public.quest_order) <> 43 then raise exception '課題数が43件ではない'; end if;
     for task in select task_id, position, lag(task_id) over w as prior, lead(task_id) over w as following
                 from public.quest_order window w as (order by position)
     loop
@@ -58,10 +58,10 @@ begin
         ) into state;
         if state <> 'completed' then raise exception '完了に失敗 %', task.task_id; end if;
     end loop;
-    if (select count(*) from public.progress where user_id = learner and status = 'completed') <> 40
-        then raise exception '全40件が順に完了していない'; end if;
-    if (select count(*) from public.notifications where user_id = learner and kind = 'assigned') <> 40
-        then raise exception '40件の依頼が一度ずつ配布されていない'; end if;
+    if (select count(*) from public.progress where user_id = learner and status = 'completed') <> 43
+        then raise exception '全43件が順に完了していない'; end if;
+    if (select count(*) from public.notifications where user_id = learner and kind = 'assigned') <> 43
+        then raise exception '43件の依頼が一度ずつ配布されていない'; end if;
 end;
 $$;
 reset role;

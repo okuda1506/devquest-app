@@ -53,6 +53,7 @@ import { readPreference, savePreference } from './preferences';
 import './styles.css';
 import { clearFirstDayCheckpoint, FirstDay, firstAssignment } from './first-day';
 import { RepositoryForm } from './repository-form';
+import { PrivacyPolicy } from './privacy-policy';
 import { Welcome } from './welcome';
 import type { FirstDayCheckpoint } from '../supabase/functions/quest/onboarding';
 import { GradeFeedback } from './grade-feedback';
@@ -282,11 +283,11 @@ export function App() {
               : 'リポジトリ設定');
     const current = currentTask(home);
     const unlockedChapter = toast ? unlockedChapterFor(toast) : undefined;
-    function login() {
+    function login(consentVersion?: string) {
         if (signingIn) return;
         setAuthError('');
         setSigningIn(true);
-        void signIn().catch((cause: Error) => {
+        void signIn(consentVersion).catch((cause: Error) => {
             setAuthError(cause.message);
             setSigningIn(false);
         });
@@ -420,6 +421,8 @@ export function App() {
         });
     }
 
+    if (location.pathname === '/privacy') return <PrivacyPolicy />;
+
     if (googleOnboarding) {
         const publicPage =
             location.pathname === '/signin' ? 'signin' : location.pathname === '/signup' ? 'signup' : undefined;
@@ -432,7 +435,14 @@ export function App() {
         if (!userId) {
             if (location.pathname !== '/' && !publicPage) return <Navigate to="/" replace />;
             return (
-                <Welcome page={publicPage} login={login} error={authError} disabled={!supabase} signingIn={signingIn} />
+                <Welcome
+                    key={publicPage}
+                    page={publicPage}
+                    login={login}
+                    error={authError}
+                    disabled={!supabase}
+                    signingIn={signingIn}
+                />
             );
         }
         if (data.profile.first_day_completed === undefined) {
@@ -616,7 +626,7 @@ export function App() {
                         ) : (
                             <button
                                 className="button login"
-                                onClick={login}
+                                onClick={() => login()}
                                 disabled={!supabase || loadingAuth || signingIn}
                             >
                                 <Github size={16} />
@@ -1551,7 +1561,7 @@ function Settings({
                 {demoMode ? (
                     <>
                         <p>初回の GitHub ログインで DevQuest の学習用プロフィールを作成します。</p>
-                        <button className="button primary" disabled={!supabase || busy} onClick={login}>
+                        <button className="button primary" disabled={!supabase || busy} onClick={() => login()}>
                             <Github size={16} /> GitHub で始める
                         </button>
                     </>

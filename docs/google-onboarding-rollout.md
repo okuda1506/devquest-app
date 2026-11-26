@@ -36,3 +36,11 @@ supabase functions deploy quest
 - 既存学習者の引き継ぎと通し確認が終わったら、GitHub の **Settings → Secrets and variables → Actions → Variables** に `VITE_GOOGLE_ONBOARDING=true` を登録し、`main` で Pages ワークフローを実行する
 
 フロントエンドを切り戻す場合は、この変数を外して Pages を再公開する。Google の学習者や進捗は保持し、本番 DB を元のスキーマへ戻す操作は行わない。
+
+## プライバシーポリシーの公開前確認
+
+- Google の新規登録では同意を選択するまで登録ボタンを使用できないことを確認する。認証を完了した後に `learners.privacy_policy_version` と `privacy_consented_at` が保存されることを確認する
+- 新しいテストアカウントで先にサインインを試し、同意付きの新規登録へ案内されることを確認する。Supabase Auth に本人確認済みの ID が作成されても、同意を照合できるまで DevQuest の学習者プロフィールは作成されない
+- 既存学習者の再サインインと GitHub 連携で、アカウント ID・進捗・既存の同意記録が維持されることを確認する
+- 公開文面の問い合わせ経路・保存期間・削除の手順を運営者の実際の運用と照合する。GitHub Issues は公開のため、個人情報を含む依頼は運営者が別途案内する窓口で受け付ける
+- ポリシーを改訂する場合は、画面で表示する文面と `privacyPolicyVersion` を更新し、DB が受け付ける版もマイグレーションで更新する。登録時の同意履歴は元の版と時刻を保持する

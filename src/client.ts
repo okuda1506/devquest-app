@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { signupChallenge } from '../supabase/functions/quest/privacy';
 import { questSessionStorage } from './quest-session';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -28,12 +29,13 @@ type Provider = 'google' | 'github';
 type OAuthIntent = { provider: Provider; returnHash: string; userId?: string };
 const intentKey = 'devquest-oauth-intent';
 
-async function startOAuth(intent: OAuthIntent, accessToken?: string) {
+async function startOAuth(intent: OAuthIntent, accessToken?: string, consentVersion?: string) {
     if (!supabase) throw new Error('Supabase の接続設定がありません。');
     const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-    const challenge = base64Url(
-        new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)))
-    );
+    const challenge = await signupChallenge(verifier);
+    if (consentVersion) {
+        await callQuest({ action: 'signup_consent', accepted: true, version: consentVersion, challenge });
+    }
     const path = accessToken ? '/auth/v1/user/identities/authorize' : '/auth/v1/authorize';
     const authorize = new URL(url + path);
     authorize.search = new URLSearchParams({
@@ -69,9 +71,9 @@ async function startOAuth(intent: OAuthIntent, accessToken?: string) {
     location.assign(destination);
 }
 
-export function signIn() {
+export function signIn(consentVersion?: string) {
     const returnHash = location.hash && location.hash !== '#/' ? location.hash : '#/settings';
-    return startOAuth({ provider: googleOnboarding ? 'google' : 'github', returnHash });
+    return startOAuth({ provider: googleOnboarding ? 'google' : 'github', returnHash }, undefined, consentVersion);
 }
 
 export async function linkProvider(provider: Provider, returnHash: string) {
@@ -153,7 +155,7 @@ export class QuestRequestError extends Error {
 
 export async function callQuest<T>(body: Record<string, unknown>): Promise<T> {
     if (!supabase) throw new Error('Supabase の接続設定がありません。');
-    if (body.action !== 'exchange' && !authStorage.expiration()) {
+    if (!['exchange', 'signup_consent'].includes(String(body.action)) && !authStorage.expiration()) {
         throw new QuestRequestError('ログインの有効期限が切れました。もう一度ログインしてください。', 401);
     }
     const { data, error } = await supabase.functions.invoke('quest', { body });
