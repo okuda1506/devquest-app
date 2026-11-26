@@ -61,6 +61,7 @@ import { settingsLink, threadLink, workspaceLinks } from './sidebar-menu';
 import { Documents } from './documents';
 import { Copy } from './copy';
 import { CriterionResults, ticketDetails } from './ticket-details';
+import { threadSourcePaths } from './thread-source';
 import { SkillProfile } from './skill-profile';
 import { ChapterCelebration } from './chapter-celebration';
 import { MemberProfile, RequesterLink, TeamMembers } from './team-members';
@@ -1278,6 +1279,24 @@ function TicketContent({
                                         <li key={hint}>{hint}</li>
                                     ))}
                                 </ol>
+                            )}
+                            {!!hints && threadSourcePaths[task.id] && (
+                                <>
+                                    <h3>関連コード（構成刷新版）</h3>
+                                    <ul>
+                                        {threadSourcePaths[task.id].map((path) => (
+                                            <li key={path}>
+                                                <a
+                                                    href={templateUrl + '/blob/thread-quests-v4/' + path}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                >
+                                                    {path.split('/').at(-1)}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </>
                             )}
                             {hints < task.hints.length && (
                                 <button className="button" onClick={() => setHints((n) => n + 1)}>
