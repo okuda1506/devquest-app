@@ -55,10 +55,15 @@ export const operationsBaseline = 'fa1e751be967d99eab0a02620b6315aad1da95aa'; //
 export const architectureBaseline = 'af05b18c0007aa78cb7809a64b71c063b8a74958'; // thread-quests-v4
 export const catalogBaseline = '404e5a42c0284c45d9cbecb6d7c68f88187ecbd8'; // thread-quests-v5
 export const expandedCatalogBaseline = 'dfef0c460bfd59b96b1cfb9791d412d17551086f'; // thread-quests-v6
-export const templateBaselines = [
+export const accountModelBaseline = '1eb7d193c1828f35966e447c8c4e426fe38b9cfd'; // thread-quests-v7
+const architectureBaselines: readonly string[] = [
+    accountModelBaseline,
     expandedCatalogBaseline,
     catalogBaseline,
-    architectureBaseline,
+    architectureBaseline
+];
+export const templateBaselines = [
+    ...architectureBaselines,
     operationsBaseline,
     quest40Baseline,
     'c39fe6597bf0929fa651596a53f3db636d71a852',
@@ -164,7 +169,7 @@ export async function verifyProtection(github: Github, canonical: readonly strin
     if (candidate.some(({ path }) => path === workflow)) {
         // 旧版は当時の保護範囲を使い 新構成では移動済みの Seed・計測・テストも照合する
         for (const commit of new Set(canonical)) {
-            const architecture = commit === architectureBaseline || commit === catalogBaseline || commit === expandedCatalogBaseline;
+            const architecture = architectureBaselines.includes(commit);
             const reference = await readTree(github, template, commit);
             if (fingerprint(candidate, architecture) === fingerprint(reference, architecture)) return commit;
         }
@@ -300,7 +305,7 @@ export async function inspectGrade(
     }
     const baseline = await verifyProtection(github, canonical, repo.full_name, sha);
     const number = Number(task.id.slice(4));
-    const operationsSupported = baseline === operationsBaseline || baseline === architectureBaseline || baseline === catalogBaseline || baseline === expandedCatalogBaseline;
+    const operationsSupported = baseline === operationsBaseline || architectureBaselines.includes(baseline);
     if (number >= 141 && !operationsSupported) {
         throw new QuestError(
             'DEV-141 以降は THREAD README の手順に沿って採点と演習コードを v3 以降に更新してください。'
