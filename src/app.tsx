@@ -1200,7 +1200,7 @@ function TicketContent({
                     <Link className="button primary" to="/settings">
                         演習リポジトリを登録する <ArrowRight size={15} />
                     </Link>
-                ) : status === 'not_started' && !gradeCheck ? (
+                ) : status === 'not_started' && gradeCheck?.state !== 'awaiting_pr' ? (
                     <>
                         <p>作業ブランチを作り、改修したコミットを GitHub に push してください。</p>
                         <button className="button primary" onClick={() => branchRef.current?.focus()}>

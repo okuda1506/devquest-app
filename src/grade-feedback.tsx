@@ -31,14 +31,9 @@ export function GradeFeedback({ check }: { check: GradeCheck }) {
             <strong>{title}</strong>
             {check.detail && <p>{check.detail}</p>}
             <p>{instruction}</p>
-            {(check.sha || check.runUrl || check.pullUrl) && (
+            {(check.sha || check.runUrl) && (
                 <p>
                     {check.sha && <code>{check.sha.slice(0, 7)}</code>}{' '}
-                    {check.pullUrl && (
-                        <a href={check.pullUrl} target="_blank" rel="noreferrer">
-                            GitHub の PR <ArrowUpRight size={12} />
-                        </a>
-                    )}{' '}
                     {check.runUrl && (
                         <a href={check.runUrl} target="_blank" rel="noreferrer">
                             GitHub Actions の実行ログ <ArrowUpRight size={12} />
