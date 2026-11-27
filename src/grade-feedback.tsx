@@ -2,7 +2,8 @@ import { ArrowUpRight } from 'lucide-react';
 import type { GradeCheck } from '../supabase/functions/quest/grade-check';
 
 const gradeCopy = {
-    unsubmitted: ['未提出', '指定の作業ブランチにコミットを push してから確認してください。'],
+    unsubmitted: ['未提出', '指定の作業ブランチにコミットを push してください。最新版では PR を開くと採点が始まります。'],
+    awaiting_pr: ['PR の作成待ち', 'GitHub で指定ブランチから main への PR を開くと採点が始まります。'],
     queued: ['採点結果待ち', '最新コミットの採点結果はまだ届いていません。GitHub の Actions タブを確認してください。'],
     running: ['GitHub Actions 実行中', '最新コミットを採点しています。Actions が完了したら結果を確認してください。'],
     failed: [
@@ -13,7 +14,7 @@ const gradeCopy = {
         '採点が中断されました',
         'GitHub の実行ログを確認し、必要に応じて Actions を再実行してから再確認してください。'
     ],
-    passed: ['合格・PR マージ待ち', '作業ブランチから main への PR をマージし、「マージを確認」を押してください。'],
+    passed: ['合格・PR マージ待ち', 'GitHub で PR を main にマージし、「マージを確認」を押してください。'],
     completed: ['完了', 'main への PR マージを確認しました。'],
     unavailable: ['採点サービスに一時的に接続できません', '少し時間をおいて再確認してください。'],
     recheck: ['採点を確認できませんでした', '表示された内容を確認してから、もう一度お試しください。']

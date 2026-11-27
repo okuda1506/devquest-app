@@ -1141,6 +1141,7 @@ function TicketContent({
     const latest = attempts[latestIndex];
     const gradeCheck = status !== 'completed' && home.gradeCheck?.taskId === task.id ? home.gradeCheck : undefined;
     const awaitingMerge = status === 'passed' && (!gradeCheck || gradeCheck.state === 'passed');
+    const pullUrl = gradeCheck?.pullUrl ?? (repoUrl ? repoUrl + '/compare/main...' + task.branch + '?expand=1' : undefined);
     const previousAttempt =
         latest &&
         attempts
@@ -1199,7 +1200,7 @@ function TicketContent({
                     <Link className="button primary" to="/settings">
                         演習リポジトリを登録する <ArrowRight size={15} />
                     </Link>
-                ) : status === 'not_started' ? (
+                ) : status === 'not_started' && gradeCheck?.state !== 'awaiting_pr' ? (
                     <>
                         <p>作業ブランチを作り、改修したコミットを GitHub に push してください。</p>
                         <button className="button primary" onClick={() => branchRef.current?.focus()}>
@@ -1211,7 +1212,7 @@ function TicketContent({
                         <p>作業ブランチから main への PR をマージし、採点結果欄でマージを確認してください。</p>
                         <a
                             className="button primary"
-                            href={repoUrl + '/compare/main...' + task.branch + '?expand=1'}
+                            href={pullUrl}
                             target="_blank"
                             rel="noreferrer"
                         >
@@ -1223,7 +1224,9 @@ function TicketContent({
                         <p>
                             {latest?.result === 'failed'
                                 ? '実行ログを確認し、修正を push してからもう一度採点結果を確認してください。'
-                                : 'GitHub Actions の実行が終わったら採点結果を確認してください。'}
+                                : gradeCheck?.pullUrl
+                                  ? 'PR の採点が終わったら結果を確認してください。'
+                                  : 'push 時の CI を確認し、指定の作業ブランチから main への PR を開いてください。'}
                         </p>
                         <button className="button primary" onClick={() => gradingRef.current?.focus()}>
                             採点結果欄へ <ArrowRight size={15} />
@@ -1410,9 +1413,19 @@ function TicketContent({
                             </p>
                         )}
                         {ready && status !== 'completed' && (
-                            <p className="muted">
-                                指定ブランチに push し、採点に合格したら自分で PR を main にマージしてください。
-                            </p>
+                            <>
+                                <p className="muted">
+                                    指定ブランチに push → CI を確認 → PR を作成 → 採点に合格 → main にマージ
+                                </p>
+                                {pullUrl && !awaitingMerge && (
+                                    <p>
+                                        <a className="sub-link" href={pullUrl} target="_blank" rel="noreferrer">
+                                            {gradeCheck?.pullUrl ? 'GitHub で PR を開く' : 'GitHub で PR を作成する'}{' '}
+                                            <ArrowUpRight size={14} />
+                                        </a>
+                                    </p>
+                                )}
+                            </>
                         )}
                         {ready && !demoMode && status !== 'completed' && (
                             <button
