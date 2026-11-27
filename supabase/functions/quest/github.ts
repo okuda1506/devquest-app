@@ -58,7 +58,9 @@ export const expandedCatalogBaseline = 'dfef0c460bfd59b96b1cfb9791d412d17551086f
 export const accountModelBaseline = '1eb7d193c1828f35966e447c8c4e426fe38b9cfd'; // thread-quests-v7
 export const numericShopBaseline = '6719113a60ae4489410cd7c2b948bbdc7507e564'; // thread-quests-v8
 export const paymentBaseline = '04dcb2d2301170ed1dd6491976fc47b933c375c1'; // thread-quests-v9
+export const pullRequestBaseline = '1e3c54ae5cc033361e5f02d14809f543f084dbe3'; // thread-quests-v10
 const architectureBaselines: readonly string[] = [
+    pullRequestBaseline,
     paymentBaseline,
     numericShopBaseline,
     accountModelBaseline,
@@ -197,6 +199,7 @@ export async function readHead(github: Github, repo: string, branch: string): Pr
 
 type Pull = {
     number: number;
+    state: 'open' | 'closed';
     merged_at: string | null;
     merge_commit_sha: string | null;
     head: { ref: string; sha: string; repo: { id: number } | null; user: { id: number } | null };
@@ -213,6 +216,7 @@ type Run = {
     conclusion: string | null;
     head_repository: { id: number } | null;
     repository: { id: number };
+    display_title?: string;
 };
 export type CriterionResult = 'passed' | 'failed' | 'unavailable';
 
@@ -243,15 +247,16 @@ export async function readCriteria(
 }
 
 type Grade =
-    | { result: 'unsubmitted'; state: 'unsubmitted' }
+    | { result: 'unsubmitted'; state: 'unsubmitted' | 'awaiting_pr' }
     | {
           sha: string;
           run: number;
           attempt: number;
           url: string;
           result: 'pending' | 'failed' | 'passed';
-          state: Exclude<GradeState, 'unsubmitted'>;
+          state: Exclude<GradeState, 'unsubmitted' | 'awaiting_pr'>;
           pull: number | null;
+          pullUrl?: string;
           merge: string | null;
       };
 
@@ -274,7 +279,7 @@ export async function inspectGrade(
         throw new QuestError('この課題はまだ解放されていません。', 403);
     const root = repoPath(repo.full_name);
     const params = new URLSearchParams({
-        state: 'closed',
+        state: 'all',
         base: 'main',
         head: repo.owner.login + ':' + task.branch,
         per_page: '30'
@@ -285,17 +290,16 @@ export async function inspectGrade(
         github<Pull[]>(root + '/pulls?' + params)
     ]);
     if (!main) throw new QuestError('main ブランチを確認できません。');
-    const merged = pulls
-        .filter(
-            (pr) =>
-                pr.merged_at &&
-                pr.merge_commit_sha &&
-                pr.head.ref === task.branch &&
-                (pr.head.repo?.id === repo.id || (!pr.head.repo && pr.head.user?.id === repo.owner.id)) &&
-                pr.base.ref === 'main' &&
-                pr.base.repo.id === repo.id &&
-                (!head || pr.head.sha === head)
-        )
+    const candidates = pulls.filter(
+        (pr) =>
+            pr.head.ref === task.branch &&
+            (pr.head.repo?.id === repo.id || (!pr.head.repo && pr.head.user?.id === repo.owner.id)) &&
+            pr.base.ref === 'main' &&
+            pr.base.repo.id === repo.id &&
+            (!head || pr.head.sha === head)
+    );
+    const merged = candidates
+        .filter((pr) => pr.merged_at && pr.merge_commit_sha)
         .sort((a, b) => (b.merged_at ?? '').localeCompare(a.merged_at ?? ''))[0];
     const sha = head ?? merged?.head.sha;
     if (!sha) return { result: 'unsubmitted', state: 'unsubmitted' };
@@ -320,19 +324,28 @@ export async function inspectGrade(
             '追加課題を採点するには、THREAD README の手順で採点ファイルを thread-quests-v2 に更新してください。'
         );
     }
-    const filters = new URLSearchParams({ branch: task.branch, event: 'push', head_sha: sha, per_page: '10' });
+    const prGrading = baseline === pullRequestBaseline;
+    const pr = prGrading
+        ? (merged ?? candidates.find((pr) => head && pr.state === 'open' && pr.head.repo?.id === repo.id))
+        : undefined;
+    if (prGrading && !pr) return { result: 'unsubmitted', state: 'awaiting_pr' };
+
+    const event = prGrading ? 'pull_request' : 'push';
+    const filters = new URLSearchParams({ branch: task.branch, event, head_sha: sha, per_page: '10' });
     const { workflow_runs: runs } = await github<{ workflow_runs: Run[] }>(
         root + '/actions/workflows/grade.yml/runs?' + filters
     );
     const run = runs
         .filter(
             (run) =>
-                run.event === 'push' &&
+                run.event === event &&
                 run.path.split('@')[0] === workflow &&
                 run.head_branch === task.branch &&
                 run.head_sha === sha &&
                 run.head_repository?.id === repo.id &&
-                run.repository.id === repo.id
+                run.repository.id === repo.id &&
+                // GitHub の実行一覧ではマージ済み PR の pull_requests が空になることがある
+                (!pr || run.display_title === 'DevQuest PR #' + pr.number)
         )
         .sort((a, b) => b.id - a.id || b.run_attempt - a.run_attempt)[0];
 
@@ -365,6 +378,7 @@ export async function inspectGrade(
         result,
         state,
         pull: merge ? merged.number : null,
+        pullUrl: pr ? 'https://github.com/' + repo.full_name + '/pull/' + pr.number : undefined,
         merge
     };
 }

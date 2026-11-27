@@ -62,6 +62,7 @@ const scenes = {
 } as const;
 const sceneCount = Object.keys(scenes).length;
 const setupReadme = 'https://github.com/' + template + '#初回セットアップ';
+const branchProtectionReadme = 'https://github.com/' + template + '#main-のブランチ保護';
 const setupChecks = [
     { label: 'EC サイトを開けた', host: 'localhost:5174' },
     { label: '店舗管理画面を開けた', host: 'localhost:5175' }
@@ -431,6 +432,16 @@ export function FirstDay({ projectRef, onSkip, onOpenTicket, account }: FirstDay
                                             </div>
                                         ))}
                                     </fieldset>
+                                    <div>
+                                        <h3>最初の PR をマージする前に</h3>
+                                        <p>
+                                            DEV-101 は push 時の CI を確認してから PR を開きます。最初の採点が実行されたら
+                                            GitHub で main のブランチ保護を設定し、採点の合格をマージの条件にしてください。
+                                        </p>
+                                        <a href={branchProtectionReadme} target="_blank" rel="noopener noreferrer">
+                                            main の保護設定を見る <ExternalLink size={13} aria-hidden="true" />
+                                        </a>
+                                    </div>
                                     <SetupHelp />
                                 </>
                             )}

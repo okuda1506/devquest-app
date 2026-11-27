@@ -10,6 +10,8 @@ THREAD の開発チームに途中参画し、改修依頼を受け取って自�
 
 [DevQuest](https://okuda1506.github.io/devquest-app/) をブラウザで開いて初出勤を開始します。環境構築の場面で GitHub を連携してから、演習リポジトリを作成・登録します。手元で起動する THREAD の手順は [Windows（WSL 2 / Ubuntu）](https://github.com/okuda1506/devquest-fashion-template#windows) または [macOS](https://github.com/okuda1506/devquest-fashion-template#macos) を参照してください。
 
+最初の PR をマージする前に、自分の演習リポジトリで [main のブランチ保護](https://github.com/okuda1506/devquest-fashion-template#main-のブランチ保護) を設定します。
+
 ## クエスト画面
 
 ![DEV-101「商品カードに在庫状況を表示する」の課題詳細。改修依頼、作業ブランチ、採点結果が並ぶ](docs/screenshots/quest-dev-101.webp)
@@ -35,7 +37,7 @@ DevQuest 本体は、専用のバックエンドサーバーを常時稼働さ�
 
 GitHub Pages は静的ファイルの配信を担当し、React アプリ自体は学習者のブラウザで動作します。採点結果の確認などのサーバー処理は Supabase Edge Functions が担当します。
 
-**採点結果の確認例：** 学習者が THREAD の改修コードを push → GitHub Actions が採点 → DevQuest の画面から Supabase Edge Functions を呼び出す → Edge Functions が GitHub API の結果を検証 → Supabase PostgreSQL に進捗を保存 → DevQuest に結果を表示
+学習者が THREAD の改修コードを push すると CI が動きます。CI を確認してから main への PR を開くと、GitHub Actions が課題を採点します。DevQuest の「採点結果を確認」で Edge Function が PR と最新コミットの結果を照合し、学習進捗を保存します。
 
 なお、**THREAD は DevQuest 本体とは別の演習用システム**です。THREAD の EC サイト・管理画面（React）、API（NestJS）、DB（PostgreSQL）は学習者のローカル環境で起動し、Supabase の DB には THREAD の商品・在庫・注文データを保存しません。
 
@@ -77,7 +79,7 @@ Google 登録・ログインへの移行は [Google 認証の公開手順](docs/
    ```
 
 5. DevQuest リポジトリの **Settings → Secrets and variables → Actions → Variables** に `VITE_SUPABASE_URL` と `VITE_SUPABASE_ANON_KEY` を設定します。ここで使うキーはフロント向けの公開 anon キーです。**Settings → Pages → Source** を **GitHub Actions** にし、**Actions → DevQuest 検証と GitHub Pages 公開** を main で実行します。
-6. 公開先で GitHub OAuth、個人所有の公開テンプレートリポジトリの登録、DEV-101 の push と採点、PR マージ、DEV-102 の解放と通知まで確認します。GitHub 側で「テスト用の空のリポジトリ」が作成された場合は、テンプレートから作成し直します。
+6. 公開先で GitHub 連携、個人所有の公開テンプレートリポジトリの登録、DEV-101 の push と CI、PR 作成と採点、PR マージ、DEV-102 の解放と通知まで確認します。GitHub 側で「テスト用の空のリポジトリ」が作成された場合は、テンプレートから作成し直します。
 
 OAuth の Secret と Supabase の service role キーはブラウザ用変数や Git に保存しません。PKCE コードの交換は Edge Function で実行し、ブラウザには Supabase セッションだけを返します。公開リポジトリの GitHub 情報は公開 API で確認し、GitHub に書き込む認可を学習者に要求しません。API レート制限が問題になる場合のみ、管理者がリポジトリへの読み取りに限定した `QUEST_GITHUB_READ_TOKEN` を Supabase の Edge Function Secrets に設定します。
 
@@ -87,13 +89,13 @@ GitHub でログインしたブラウザでは、同じ URL を開き直して�
 
 Google の新規登録時は [プライバシーポリシー](https://okuda1506.github.io/devquest-app/#/privacy) への同意が必要です。公開前の通し確認、死活監視、問い合わせ調査、復元と切り戻しは [運用手順](docs/operations.md) を参照してください。
 
-- ワークフローは `task/DEV-101` から `task/DEV-143` の push で課題テストを実行します。既存テストに加え、解放済みの過去課題のテストも実行します。採点専用ファイルの変更は GitHub Actions と Edge Function の両方で照合します。
-- Edge Function はログイン中の GitHub ユーザー ID、リポジトリ ID、指定作業ブランチの先端 SHA、採点ワークフローの SHA と結論を照合します。合格と PR マージを分け、main に到達したマージを確認して次を解放します。ブラウザから進捗・採点・通知を書き換える権限は付与しません。
+- `thread-quests-v10` は `task/DEV-101` から `task/DEV-143` の push で通常の CI を実行します。main への PR を開くと通常の検証に加えて課題条件と過去課題の回帰テストを実行し、PR に再 push があるたびに採点します。v9 以前で演習中なら作成時の方式で提出できます。
+- Edge Function はログイン中の GitHub ユーザー ID、リポジトリ ID、指定ブランチの最新コミット、採点実行とその結論を照合します。PR 採点では PR 番号も照合します。採点専用ファイルは GitHub Actions と Edge Function の両方で照合し、合格した PR の main へのマージを確認して次を解放します。ブラウザから進捗・採点・通知を書き換える権限は付与しません。
 - 学習者のリポジトリは公開されるため、業務コード、実際の顧客データ、秘密情報を置かないでください。採点は研修用途の公開テストで、機密の試験問題や完全な不正防止が必要な場合は、採点を独立したサービスに移してください。
 - Edge Function は THREAD の分離前、`thread-split-v1`、`thread-checkout-v1` の各版の保護ファイル一式を認識します。分離版から演習中のリポジトリも、その版のまま提出できます。[購入手続きを取り込む場合の移行手順](https://github.com/okuda1506/devquest-fashion-template#旧版から演習を進めている場合)
 - 採点基準を更新するときは、Actions の基準タグと Edge Function の承認済みコミットを計画的に更新します。追加の基準は Edge Function の `THREAD_TEMPLATE_SHA` に公開済みの40桁コミット SHA をコンマ区切りで指定できます。課題追加時はカタログ・DB の解放順・ワークフロー・回帰テストを揃えます。
 - DEV-141〜143 の公開時は先に THREAD の `thread-quests-v3` を公開し、DevQuest の `supabase db push` と `supabase functions deploy quest` を順に反映します。DEV-140 完了済みの場合は DEV-141 を割り当てます。既存の演習リポジトリで続ける場合は [THREAD の採点更新手順](https://github.com/okuda1506/devquest-fashion-template#採点の更新すでに演習中の場合) に沿って v3 の変更を取り込みます。
-- THREAD の模擬決済対応版（`thread-quests-v9`）をテンプレートの `main` に反映する前に、このリポジトリの `supabase functions deploy quest` を実行します。v8 以前の演習リポジトリは作成時の採点基準で継続できます。
+- PR 採点版を公開する際は THREAD の `thread-quests-v10` タグを公開し、このリポジトリの `supabase functions deploy quest` を実行してから、THREAD のテンプレートの `main` を更新します。PR 採点への切り替えで DB マイグレーションは追加されません。
 - Supabase の無料プロジェクトが一時停止した場合は、管理画面で再開して Edge Function と DB の疎通を確認します。個人データを含むため、バックアップはアクセスを制限した場所に保管し、復元後にリポジトリ ID、完了 SHA、通知件数を確認します。採点の再確認は同じ提出・通知を重複登録しません。
 
 模擬決済対応版のスキーマと手順は、THREAD のコード構成を参照してください。[THREADのコード構成](https://github.com/okuda1506/devquest-fashion-template/blob/thread-quests-v9/docs/code-architecture.md)

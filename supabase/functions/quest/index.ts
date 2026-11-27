@@ -255,6 +255,7 @@ Deno.serve(async (request) => {
                     log.runAttempt = grade.attempt || undefined;
                     gradeCheck.sha = grade.sha;
                     gradeCheck.runUrl = grade.url ? grade.url + '/attempts/' + grade.attempt : undefined;
+                    gradeCheck.pullUrl = grade.pullUrl;
                     const next = tasks.find((candidate) => candidate.available && candidate.previous === task.id);
                     const saved = await db.rpc('record_grade', {
                         p_user: userId,

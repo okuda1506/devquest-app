@@ -10,6 +10,7 @@ import {
     accountModelBaseline,
     numericShopBaseline,
     paymentBaseline,
+    pullRequestBaseline,
     readCriteria,
     repoName,
     verifyProtection,
@@ -39,6 +40,12 @@ type Fixture = {
     head?: string | null;
     runHead?: string;
     merged?: boolean;
+    open?: boolean;
+    closed?: boolean;
+    pullHead?: string;
+    pullRepoId?: number;
+    runEvent?: 'pull_request' | 'push';
+    runPull?: number;
     changedFiles?: boolean;
     base?: string;
     relation?: string;
@@ -51,6 +58,12 @@ function github({
     head = sha,
     runHead = sha,
     merged,
+    open,
+    closed,
+    pullHead = sha,
+    pullRepoId = repo.id,
+    runEvent = 'push',
+    runPull = 3,
     changedFiles,
     base = 'main',
     relation = 'ahead',
@@ -69,13 +82,16 @@ function github({
                 return { object: { type: 'commit', sha: readCount++ && movingHead ? changed : head } };
             }
             if (slug.includes('/pulls'))
-                return merged
+                return merged || open || closed
                     ? [
                           {
                               number: 3,
-                              merged_at: '2026-11-23',
-                              merge_commit_sha: merge,
-                              head: { ref: branch, sha, repo: { id: repo.id }, user: { id: repo.owner.id } },
+                              state: open ? 'open' : 'closed',
+                              merged_at: merged ? '2026-11-23' : null,
+                              merge_commit_sha: merged ? merge : null,
+                              head: {
+                                  ref: branch, sha: pullHead, repo: { id: pullRepoId }, user: { id: repo.owner.id }
+                              },
                               base: { ref: base, repo: { id: repo.id } }
                           }
                       ]
@@ -93,7 +109,8 @@ function github({
                         {
                             id: 701,
                             run_attempt: 1,
-                            event: 'push',
+                            event: runEvent,
+                            display_title: 'DevQuest PR #' + runPull,
                             head_branch: branch,
                             head_sha: runHead,
                             head_repository: { id: repo.id },
@@ -111,6 +128,56 @@ function github({
 }
 
 describe('演習の判定', () => {
+    const prCanonical = [pullRequestBaseline];
+
+    test.each([
+        {},
+        { closed: true },
+        { open: true, base: 'another-base' },
+        { open: true, pullRepoId: 999 },
+        { open: true, pullHead: changed }
+    ])('v10 は現在の作業コミットを対象とする PR が開くまで採点しない %o', async (fixture) => {
+        const api = vi.fn(github(fixture));
+        await expect(inspectGrade(api, prCanonical, repo, task, null)).resolves.toEqual({
+            result: 'unsubmitted',
+            state: 'awaiting_pr'
+        });
+        expect(api.mock.calls.some(([path]) => path.includes('/actions/'))).toBe(false);
+    });
+
+    test.each([
+        { runEvent: 'push' as const },
+        { runEvent: 'pull_request' as const, runPull: 2 },
+        { runEvent: 'pull_request' as const, runHead: changed }
+    ])('v10 は別イベント・別 PR・更新前の結果を採用しない %o', async (fixture) => {
+        const api = vi.fn(github({ open: true, ...fixture }));
+        await expect(inspectGrade(api, prCanonical, repo, task, null)).resolves.toMatchObject({
+            result: 'pending',
+            state: 'queued',
+            run: 0,
+            pullUrl: 'https://github.com/learner/thread/pull/3'
+        });
+        expect(api.mock.calls.some(([path]) => path.includes('event=pull_request&head_sha=' + sha))).toBe(true);
+    });
+
+    test('v10 は最新の PR を判定し、合格した PR のマージでのみ完了する', async () => {
+        const read = (fixture: Fixture) =>
+            inspectGrade(github({ runEvent: 'pull_request', ...fixture }), prCanonical, repo, task, null);
+        await expect(read({ open: true, conclusion: 'failure' })).resolves.toMatchObject({ state: 'failed' });
+        await expect(read({ open: true })).resolves.toMatchObject({ state: 'passed', sha, merge: null });
+        await expect(read({ merged: true, head: null, conclusion: 'failure' })).resolves.toMatchObject({
+            state: 'failed',
+            merge: null
+        });
+        await expect(read({ merged: true, head: null })).resolves.toMatchObject({
+            state: 'completed',
+            result: 'passed',
+            sha,
+            pull: 3,
+            merge
+        });
+    });
+
     test('既存チャプターの順番を保って新しい課題を解放する', () => {
         expect(tasks).toHaveLength(43);
         expect(new Set(tasks.map((item) => item.id)).size).toBe(43);
