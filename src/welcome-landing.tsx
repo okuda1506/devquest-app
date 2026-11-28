@@ -1,13 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, Lightbulb, Pause, Play, RotateCcw } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { chapters, tasks, team } from '../supabase/functions/quest/catalog';
-import questPreview from '../docs/screenshots/quest-preview.webp';
-import skillPreview from '../docs/screenshots/skill-profile.webp';
+import { team } from '../supabase/functions/quest/catalog';
+import quest from '../docs/screenshots/quest-dev-101.webp';
 import campaign from './assets/thread-campaign.webp';
 import campaignPortrait from './assets/thread-campaign-portrait.webp';
-import { DialogueLine, useDialoguePlayback } from './dialogue-line';
+import storefront from './assets/landing/storefront.webp';
+import admin from './assets/landing/admin-dashboard.webp';
+import localDevelopment from './assets/landing/local-development.webp';
+import typescript from './assets/landing/tech/typescript.svg';
+import react from './assets/landing/tech/react.svg';
+import nestjs from './assets/landing/tech/nestjs.svg';
+import postgresql from './assets/landing/tech/postgresql.svg';
+import prisma from './assets/landing/tech/prisma.svg';
+import docker from './assets/landing/tech/docker.svg';
+import vite from './assets/landing/tech/vitejs.svg';
+import githubActions from './assets/landing/tech/githubactions.svg';
+import vscode from './assets/landing/tech/vscode.svg';
+import { DialogueLine, useDialoguePlayback, useReducedMotion } from './dialogue-line';
 import { MemberAvatar, type MemberId } from './team-members';
+import { useLandingMotion } from './welcome-motion';
+import './welcome-landing.css';
 
 const briefing = [
     { member: 'pm', line: 'おはよう！ 今日からこの店の開発を一緒に頼みます。さっそく売り場を見に行こうか。' },
@@ -19,48 +31,75 @@ const briefing = [
     }
 ] satisfies { member: MemberId; line: string }[];
 
-const workflow = [
-    [
-        '初出勤でチームに会う',
-        '入館証を受け取ったらメンバーと顔合わせ。商品の在庫はどこに保存されるのか、チームの設計書やテーブル定義書を手がかりに調べられます。'
-    ],
-    [
-        '自分のPCに売り場を立ち上げる',
-        'GitHubを連携して演習リポジトリを作成。Windows（WSL 2）またはmacOSでECサイトと店舗管理画面を起動し、依頼に書かれた現象を再現します。'
-    ],
-    [
-        '修正を提出して次の依頼へ',
-        '作業ブランチをGitHubにpushすると自動テストが走ります。DevQuestで完了条件ごとの結果を読み、合格した修正をプルリクエスト（PR）でマージすると次の依頼が届きます。'
-    ]
+const screens = [
+    { src: storefront, label: 'THREADのECサイト', height: 900 },
+    { src: admin, label: '店舗管理画面', height: 1095 },
+    { src: quest, label: 'DevQuestのクエスト画面', height: 943 }
 ];
 
-const chapterOutcomes = [
-    'ReactとTypeScriptで商品一覧を改修。画面を操作して不具合を再現し、表示とデータの食い違いを探せるようになります。',
-    'NestJSとPrismaを使って受注や在庫のAPIを改修。検索条件やページが変わっても正しいデータを返す方法を学びます。',
-    'カートの操作から注文APIまでをたどり、画面の金額とサーバーの計算結果をそろえるような変更に取り組みます。',
-    '注文直後に通信が切れたらどうなるか。操作をやり直しても注文や在庫が食い違わないように設計する力を磨きます。日次売上の不具合をログで追い、数千件の商品データで売上レポートの性能を計測します。'
+const work = [
+    {
+        title: 'フロントエンド改修',
+        description: 'ReactとTypeScriptで構築された既存画面の調査・改修を行います。',
+        examples: '商品一覧・検索条件・ソート処理・UIの改善など。'
+    },
+    {
+        title: 'バックエンド保守',
+        description: 'NestJSで構築されたAPIの仕様を理解し、データベースとの連携や業務ロジックを改修します。',
+        examples: 'API改修・データ検索・在庫管理・バリデーションなど。'
+    },
+    {
+        title: 'フルスタック改修',
+        description:
+            'フロントエンドからバックエンドまで横断的に調査し、システム全体の整合性を意識した改修を行います。',
+        examples: 'API連携・カート処理・注文処理・管理機能の改善など。'
+    },
+    {
+        title: '新機能開発・障害対応',
+        description: '新機能の開発に加え、運用中に発生する障害の調査やパフォーマンス改善にも取り組みます。',
+        examples: '外部APIを用いた新機能開発（追加予定）・ログ調査・SQL最適化・パフォーマンス改善など。'
+    }
 ];
+
+const technologies = [
+    ['TypeScript', typescript],
+    ['React', react],
+    ['NestJS', nestjs],
+    ['PostgreSQL', postgresql],
+    ['Prisma', prisma],
+    ['Docker', docker],
+    ['Vite', vite],
+    ['GitHub Actions', githubActions],
+    ['VS Code', vscode]
+];
+
+const closingTitle = 'Ready to join?';
+const closingLetterMs = 100;
+const readingPause = { baseMs: 1050, perCharacterMs: 42 };
+
+function JoinLink() {
+    return (
+        <Link className="landing-join-link" to="/signup">
+            プロジェクトにジョイン
+        </Link>
+    );
+}
 
 function TeamBriefing() {
     const [index, setIndex] = useState(0);
-    const { member, line } = briefing[index];
-    const { typing, finish } = useDialoguePlayback(line, false);
-    const last = index === briefing.length - 1;
+    const [visible, setVisible] = useState(true);
     const dialogue = useRef<HTMLDivElement>(null);
-    const [inView, setInView] = useState(false);
-    const [paused, setPaused] = useState(false);
-    const playing = inView && !paused;
-    const ended = last && !typing;
+    const reduced = useReducedMotion();
+    const { member, line } = briefing[reduced ? 0 : index];
+    const { typing, finish } = useDialoguePlayback(line, false);
 
     useEffect(() => {
-        let visible = true;
-        function update() {
-            setInView(visible && !document.hidden);
-        }
+        let inView = true;
+        const update = () => setVisible(inView && !document.hidden);
         const observer =
-            'IntersectionObserver' in window
+            typeof IntersectionObserver === 'function'
                 ? new IntersectionObserver(([entry]) => {
-                      visible = entry.isIntersecting;
+                      inView = entry.isIntersecting;
                       update();
                   })
                 : undefined;
@@ -74,60 +113,80 @@ function TeamBriefing() {
     }, []);
 
     useEffect(() => {
-        if (!playing || typing || last) return;
-        // 文字送りが終わってから読み切る時間を取る
-        const timer = window.setTimeout(() => setIndex(index + 1), 2000 + line.length * 65);
+        if (typing || reduced || !visible) return;
+        const delay = readingPause.baseMs + line.length * readingPause.perCharacterMs;
+        const timer = window.setTimeout(() => setIndex((current) => (current + 1) % briefing.length), delay);
         return () => window.clearTimeout(timer);
-    }, [index, last, line, playing, typing]);
+    }, [typing, reduced, visible, line]);
 
-    const controlLabel = ended ? '会話をもう一度再生' : paused ? '会話を再開' : '会話を一時停止';
-    const ControlIcon = ended ? RotateCcw : paused ? Play : Pause;
     return (
-        <section className="team-briefing" aria-label="初出勤プレビュー">
-            <div className="briefing-store">
-                <picture>
-                    <source media="(max-aspect-ratio: 4/5)" srcSet={campaignPortrait} width="941" height="1672" />
-                    <img src={campaign} alt="" width="1536" height="1024" fetchPriority="high" />
-                </picture>
-                <span className="store-sign">
-                    <small>担当するストア</small>
-                    <b lang="en">THREAD.</b>
-                </span>
-            </div>
-            <div className="briefing-dialogue" ref={dialogue} data-paused={!playing || undefined}>
-                <div className="briefing-speech" aria-hidden="true">
-                    <MemberAvatar member={member} speaking={typing} expression="happy" />
-                    <div>
-                        <div className="briefing-speaker">
+        <div className="landing-briefing" ref={dialogue} data-paused={!visible || undefined}>
+            <div className="landing-speech" aria-hidden="true">
+                <MemberAvatar member={member} speaking={typing} expression="happy" />
+                <div className="landing-speech-copy">
+                    {briefing.map((message) => (
+                        <div className="landing-speech-measure" key={message.member}>
+                            <div className="landing-speaker">
+                                <strong>{team[message.member].name}</strong>
+                                <span>{team[message.member].role}</span>
+                            </div>
+                            <p className="dialogue-line">{message.line}</p>
+                        </div>
+                    ))}
+                    <div className="landing-speech-current">
+                        <div className="landing-speaker">
                             <strong>{team[member].name}</strong>
                             <span>{team[member].role}</span>
                         </div>
-                        <DialogueLine key={member} id="briefing-line" line={line} typing={typing} onComplete={finish} />
+                        <DialogueLine
+                            key={member}
+                            id="briefing-line"
+                            line={line}
+                            typing={typing}
+                            onComplete={finish}
+                        />
                     </div>
                 </div>
-                <ol className="dialogue-transcript" aria-label="朝会の会話">
-                    {briefing.map(({ member, line }) => (
-                        <li key={member}>
-                            {team[member].name}（{team[member].role}）「{line}」
-                        </li>
-                    ))}
-                </ol>
-                <button
-                    className="briefing-playback"
-                    type="button"
-                    aria-label={controlLabel}
-                    title={controlLabel}
-                    onClick={() => {
-                        if (ended) {
-                            setIndex(0);
-                            setPaused(false);
-                        } else {
-                            setPaused(!paused);
-                        }
-                    }}
-                >
-                    <ControlIcon size={17} aria-hidden="true" />
-                </button>
+            </div>
+            <ol className="dialogue-transcript" aria-label="開発メンバーの会話">
+                {briefing.map(({ member, line }) => (
+                    <li key={member}>
+                        {team[member].name}（{team[member].role}）「{line}」
+                    </li>
+                ))}
+            </ol>
+        </div>
+    );
+}
+
+function ClosingCall({ started }: { started: boolean }) {
+    const reduced = useReducedMotion();
+    const [letters, setLetters] = useState(0);
+    const typing = started && !reduced && letters < closingTitle.length;
+
+    useEffect(() => {
+        if (!typing) return;
+        const timer = window.setTimeout(() => setLetters(letters + 1), closingLetterMs);
+        return () => window.clearTimeout(timer);
+    }, [letters, typing]);
+
+    return (
+        <section
+            className="landing-closing landing-frame"
+            aria-labelledby="landing-closing-title"
+            data-reveal="closing"
+        >
+            <h2 id="landing-closing-title" lang="en">
+                <span className="landing-closing-measure">{closingTitle}</span>
+                {typing && (
+                    <span className="landing-closing-typed" aria-hidden="true">
+                        {closingTitle.slice(0, letters)}
+                        <span className="landing-caret" />
+                    </span>
+                )}
+            </h2>
+            <div className="landing-closing-action" data-typing={typing || undefined}>
+                <JoinLink />
             </div>
         </section>
     );
@@ -135,143 +194,120 @@ function TeamBriefing() {
 
 export function WelcomeLanding() {
     const landing = useRef<HTMLDivElement>(null);
-    useLayoutEffect(() => {
-        if (!landing.current || !('IntersectionObserver' in window)) return;
-        // 入場時だけ動かす。読み戻しやフォーカス移動で本文を隠さない
-        const observer = new IntersectionObserver(
-            (entries) => {
-                for (const entry of entries) {
-                    if (!entry.isIntersecting) continue;
-                    (entry.target as HTMLElement).dataset.enter = 'seen';
-                    observer.unobserve(entry.target);
-                }
-            },
-            { rootMargin: '0px 0px -5% 0px' }
-        );
-        for (const item of landing.current.querySelectorAll<HTMLElement>('[data-enter]')) {
-            item.dataset.enter = 'waiting';
-            observer.observe(item);
-        }
-        return () => observer.disconnect();
-    }, []);
+    const [closingStarted, setClosingStarted] = useState(false);
+    useLandingMotion(landing, setClosingStarted);
 
     return (
-        <div ref={landing} className="welcome-landing">
-            <TeamBriefing />
-            <div className="welcome-container">
-                <section className="welcome-intro" aria-labelledby="welcome-title" data-enter="">
-                    <h1 id="welcome-title">
-                        <span>初仕事は</span>
-                        <span>アパレルECの改修</span>
+        <div className="welcome-landing" ref={landing}>
+            <section className="landing-hero landing-frame" aria-labelledby="landing-title">
+                <picture className="landing-hero-picture">
+                    <source
+                        media="(max-width: 600px) and (orientation: portrait)"
+                        srcSet={campaignPortrait}
+                        width="941"
+                        height="1672"
+                    />
+                    <img src={campaign} alt="" width="1536" height="1024" fetchPriority="high" />
+                </picture>
+                <div className="landing-hero-lead">
+                    <h1 id="landing-title" lang="en">
+                        DevQuest
                     </h1>
-                    <div>
-                        <p className="welcome-lead">
-                            「売り切れって商品を開くまで分からないの？」
-                            <wbr />
-                            お客様のひと言が最初のチケットです。アパレルストア「THREAD」の開発チームに入り、手元でECサイトを直しながらクエストを進めます。
-                        </p>
-                        <Link className="button primary welcome-cta" to="/signup">
-                            無料で始める <ArrowRight size={17} aria-hidden="true" />
-                        </Link>
-                        <p className="welcome-note">
-                            登録にはGoogleアカウントを使います。演習にはGitHubアカウントと本人所有の公開リポジトリが必要です。
-                        </p>
-                    </div>
-                </section>
-
-                <section className="welcome-section" aria-labelledby="welcome-flow">
-                    <h2 id="welcome-flow" data-enter="">
-                        初出勤から最初のマージまで
-                    </h2>
-                    <div className="welcome-spread">
-                        <figure className="welcome-quest-sheet" data-enter="">
-                            <figcaption>
-                                <span className="ticket-number">{tasks[0].id}</span>
-                                <strong>{tasks[0].title}</strong>
-                            </figcaption>
+                    <p className="landing-subtitle" lang="en">
+                        Experience Real Development.
+                    </p>
+                    <p>
+                        クエスト形式で実際の開発業務を疑似体験できる、全く新しいエンジニアリング学習プラットフォーム。
+                    </p>
+                    <JoinLink />
+                </div>
+                <TeamBriefing />
+            </section>
+            <section className="landing-section" aria-labelledby="landing-project">
+                <div className="landing-intro">
+                    <h2 id="landing-project">THREAD. にジョインする</h2>
+                    <p>
+                        アパレルEC「THREAD.」を運営するチームにジョイン。メンバーから届く開発依頼をもとに、既存コードの調査や不具合修正、新機能開発などに取り組みます。
+                    </p>
+                </div>
+                <div className="landing-gallery">
+                    {screens.map(({ src, label, height }, index) => (
+                        <figure key={label} style={{ '--order': index } as CSSProperties}>
+                            <figcaption>{label}</figcaption>
                             <img
-                                src={questPreview}
-                                width="1155"
-                                height="740"
+                                src={src}
+                                width="1440"
+                                height={height}
                                 loading="lazy"
-                                alt="改修依頼、再現手順、作業ブランチ、段階別ヒントが並ぶ最初のチケット"
+                                decoding="async"
+                                alt={label + 'のスクリーンショット'}
+                                data-reveal="screen"
                             />
-                            <details className="welcome-hint">
-                                <summary>
-                                    <Lightbulb size={16} aria-hidden="true" />
-                                    最初のチケットのヒント
-                                    <ChevronDown size={16} aria-hidden="true" />
-                                </summary>
-                                <p>{tasks[0].hints[0]}</p>
-                            </details>
                         </figure>
-                        <ol className="welcome-workflow">
-                            {workflow.map(([title, description]) => (
-                                <li key={title} data-enter="">
-                                    <h3>{title}</h3>
-                                    <p>{description}</p>
-                                </li>
-                            ))}
-                        </ol>
-                    </div>
-                </section>
-
-                <section className="welcome-section welcome-curriculum" aria-labelledby="welcome-skills">
-                    <div data-enter="">
-                        <h2 id="welcome-skills">商品画面から本番運用まで</h2>
-                        <p>
-                            商品カードの小さな修正からスタート。章が進むにつれて、担当する範囲が売り場の裏側まで広がります。
-                        </p>
-                    </div>
-                    <ol className="welcome-chapters">
-                        {chapters.map((chapter, index) => (
-                            <li key={chapter} data-enter="">
-                                <span className="chapter-index" aria-hidden="true">
-                                    {String(index + 1).padStart(2, '0')}
-                                </span>
-                                <div>
-                                    <h3>{chapter}</h3>
-                                    <p>{chapterOutcomes[index]}</p>
-                                    {chapter === '新機能・本番障害対応' && (
-                                        <p className="upcoming-quests">
-                                            <strong>上級クエストに追加予定</strong>
-                                            外部APIを組み込んだ新機能の開発を予定しています。
-                                        </p>
-                                    )}
-                                </div>
-                            </li>
-                        ))}
-                    </ol>
-                </section>
-
-                <section className="welcome-section welcome-skill-profile" aria-labelledby="welcome-record">
-                    <div data-enter="">
-                        <h2 id="welcome-record">
-                            自分のPRが
+                    ))}
+                </div>
+            </section>
+            <section className="landing-section landing-workflow" aria-labelledby="landing-workflow">
+                <div className="landing-intro">
+                    <h2 id="landing-workflow">実務と同じ開発ワークフロー</h2>
+                    <p>チケットの確認〜PR・マージまで、実際の開発現場を想定したプロセスで改修を進めます。</p>
+                </div>
+                <div className="landing-bench">
+                    <div className="landing-bench-copy" data-reveal="copy">
+                        <h3>
+                            自分の環境で、
                             <br />
-                            スキルの記録になる
-                        </h2>
+                            実務さながらの開発を。
+                        </h3>
                         <p>
-                            スキルプロフィールには、何を実装したかが課題ごとに残ります。採点ログとマージ済みのPRを開けば、どんなテストを通してコードをどう直したかまで振り返れます。
+                            DevQuestの開発はブラウザ内で完結しません。GitHubからソースコードをクローンし、あなたが普段からお使いのコードエディタやローカル環境で実際にシステムを改修します。
                         </p>
-                        <Link className="sub-link" to="/signup">
-                            初出勤の準備を始める <ArrowRight size={16} aria-hidden="true" />
-                        </Link>
                     </div>
-                    <figure className="welcome-proof" data-enter="">
-                        <figcaption>
-                            スキルプロフィール <span>学習記録の例</span>
-                        </figcaption>
+                    <div className="landing-device" data-reveal="device">
                         <img
-                            src={skillPreview}
-                            width="950"
-                            height="335"
+                            src={localDevelopment}
+                            width="1440"
+                            height="768"
                             loading="lazy"
-                            alt="Reactの画面実装などのスキルに対応する採点ログとマージ済みPR"
+                            decoding="async"
+                            alt="THREADのTypeScriptコードをVS Codeで開いたMacBook Air"
                         />
-                    </figure>
-                </section>
-            </div>
+                    </div>
+                </div>
+            </section>
+            <section className="landing-section landing-work" aria-labelledby="landing-work">
+                <h2 id="landing-work">THREADチームで経験できる業務</h2>
+                <div className="landing-jobs">
+                    {work.map(({ title, description, examples }, index) => (
+                        <article
+                            key={title}
+                            data-reveal="job"
+                            style={{ '--order': Math.floor(index / 2) } as CSSProperties}
+                        >
+                            <div>
+                                <h3>{title}</h3>
+                                <p>{description}</p>
+                                <p className="landing-examples">{examples}</p>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            </section>
+            <section className="landing-section landing-tech" aria-labelledby="landing-tech">
+                <div className="landing-intro">
+                    <h2 id="landing-tech">技術スタック</h2>
+                    <p>フロントエンドからバックエンドまでTypeScriptで構築されたECシステム。</p>
+                </div>
+                <ul className="landing-logos">
+                    {technologies.map(([name, logo], index) => (
+                        <li key={name} data-reveal="logo" style={{ '--order': index } as CSSProperties}>
+                            <img src={logo} width="46" height="42" loading="lazy" decoding="async" alt="" />
+                            <span>{name}</span>
+                        </li>
+                    ))}
+                </ul>
+            </section>
+            <ClosingCall started={closingStarted} />
         </div>
     );
 }
