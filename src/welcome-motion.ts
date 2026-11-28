@@ -2,7 +2,7 @@ import { useLayoutEffect, type RefObject } from 'react';
 import { useReducedMotion } from './dialogue-line';
 
 const startLine = 0.6;
-const deviceFinishLine = 0.33;
+const copyDuration = 650;
 
 export function useLandingMotion(
     landing: RefObject<HTMLDivElement | null>,
@@ -22,7 +22,23 @@ export function useLandingMotion(
         if (!pending.size) return;
 
         let frame = 0;
-        const benchCopy = root.querySelector<HTMLElement>('[data-reveal="copy"]');
+        const enteredAt = new Map<HTMLElement, number>();
+        const prerequisites = new Map(
+            Array.from(pending, (item) => {
+                const section = item.closest('.landing-section');
+                const intro = section?.querySelector<HTMLElement>('[data-reveal="intro"]');
+                const copy =
+                    item.dataset.reveal === 'device'
+                        ? section?.querySelector<HTMLElement>('[data-reveal="copy"]')
+                        : null;
+                return [
+                    item,
+                    [intro, copy].filter((part): part is HTMLElement => !!part && part !== item)
+                ] as const;
+            })
+        );
+        const device = root.querySelector<HTMLElement>('[data-reveal="device"]');
+        root.style.setProperty('--landing-copy-duration', copyDuration + 'ms');
 
         function stop() {
             window.removeEventListener('scroll', requestUpdate);
@@ -31,7 +47,6 @@ export function useLandingMotion(
 
         function reveal(item: HTMLElement, animate: boolean) {
             item.dataset.motion = animate ? 'entered' : 'done';
-            item.style.removeProperty('--device-progress');
             pending.delete(item);
             if (animate && item.dataset.reveal === 'closing') startClosing(true);
         }
@@ -40,7 +55,8 @@ export function useLandingMotion(
             const height = window.innerHeight;
             const threshold = height * startLine;
             const atEnd = window.scrollY + height >= document.documentElement.scrollHeight - 2;
-            const copyTop = benchCopy?.getBoundingClientRect().top ?? Number.NEGATIVE_INFINITY;
+            const now = performance.now();
+            const deviceTop = device?.getBoundingClientRect().top ?? Infinity;
             const positions = Array.from(pending, (item) => [item, item.getBoundingClientRect()] as const);
             let precedingScreenReady = true;
 
@@ -48,17 +64,24 @@ export function useLandingMotion(
                 const section = item.dataset.reveal;
                 const past = rect.bottom <= 0;
                 const atEndAndVisible = atEnd && rect.top < height;
-                const ready = rect.top <= threshold || atEndAndVisible;
+                const ready =
+                    rect.top <= threshold ||
+                    atEndAndVisible ||
+                    (section === 'copy' && deviceTop <= threshold && rect.top < height);
+                const before = prerequisites.get(item) ?? [];
 
                 if (past || (initial && ready)) {
                     reveal(item, false);
-                } else if (section === 'device') {
-                    // 開発環境の説明を先に表示し、画像だけをスクロール量に追従させる
-                    const top = Math.max(rect.top, copyTop + 24);
-                    const progress = (threshold - top) / (height * (startLine - deviceFinishLine));
-                    if (progress >= 1 || atEndAndVisible) reveal(item, false);
-                    else item.style.setProperty('--device-progress', String(Math.max(0, progress)));
-                } else if (ready && (section !== 'screen' || precedingScreenReady)) {
+                } else if (
+                    ready &&
+                    !before.some((part) => pending.has(part)) &&
+                    (section !== 'screen' || precedingScreenReady)
+                ) {
+                    // 同じスクロール位置で文言と画像が発火する場合も、文言が表示されるまで待つ
+                    const latest = Math.max(...before.map((part) => enteredAt.get(part) ?? -Infinity));
+                    const delay = Math.max(0, latest + copyDuration - now);
+                    item.style.setProperty('--landing-reveal-delay', delay + 'ms');
+                    if (section === 'intro' || section === 'copy') enteredAt.set(item, now + delay);
                     reveal(item, true);
                 }
                 if (section === 'screen' && pending.has(item)) precedingScreenReady = false;
@@ -88,7 +111,6 @@ export function useLandingMotion(
             window.cancelAnimationFrame(frame);
             for (const item of pending) {
                 delete item.dataset.motion;
-                item.style.removeProperty('--device-progress');
             }
         };
     }, [landing, reduced, startClosing]);

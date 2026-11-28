@@ -224,7 +224,7 @@ export function WelcomeLanding() {
                 <TeamBriefing />
             </section>
             <section className="landing-section" aria-labelledby="landing-project">
-                <div className="landing-intro">
+                <div className="landing-intro" data-reveal="intro">
                     <h2 id="landing-project">THREAD. にジョインする</h2>
                     <p>
                         アパレルEC「THREAD.」を運営するチームにジョイン。メンバーから届く開発依頼をもとに、既存コードの調査や不具合修正、新機能開発などに取り組みます。
@@ -248,7 +248,7 @@ export function WelcomeLanding() {
                 </div>
             </section>
             <section className="landing-section landing-workflow" aria-labelledby="landing-workflow">
-                <div className="landing-intro">
+                <div className="landing-intro" data-reveal="intro">
                     <h2 id="landing-workflow">実務と同じ開発ワークフロー</h2>
                     <p>チケットの確認〜PR・マージまで、実際の開発現場を想定したプロセスで改修を進めます。</p>
                 </div>
@@ -276,7 +276,9 @@ export function WelcomeLanding() {
                 </div>
             </section>
             <section className="landing-section landing-work" aria-labelledby="landing-work">
-                <h2 id="landing-work">THREADチームで経験できる業務</h2>
+                <h2 id="landing-work" data-reveal="intro">
+                    THREADチームで経験できる業務
+                </h2>
                 <div className="landing-jobs">
                     {work.map(({ title, description, examples }, index) => (
                         <article
@@ -294,7 +296,7 @@ export function WelcomeLanding() {
                 </div>
             </section>
             <section className="landing-section landing-tech" aria-labelledby="landing-tech">
-                <div className="landing-intro">
+                <div className="landing-intro" data-reveal="intro">
                     <h2 id="landing-tech">技術スタック</h2>
                     <p>フロントエンドからバックエンドまでTypeScriptで構築されたECシステム。</p>
                 </div>
