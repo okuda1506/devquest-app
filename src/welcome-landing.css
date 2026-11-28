@@ -539,8 +539,48 @@
         padding-inline: 9px;
     }
 
+    .landing-hero {
+        grid-template-rows: 1fr auto;
+        align-items: stretch;
+        padding-top: clamp(28px, 7.5vw, 44px);
+    }
+
+    .landing-hero::before {
+        background: linear-gradient(
+            180deg,
+            rgb(0 0 0 / 62%),
+            rgb(0 0 0 / 53%) 29%,
+            transparent 51%,
+            rgb(0 0 0 / 80%)
+        );
+    }
+
+    .landing-hero-lead {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
     .landing-hero h1 {
         font-size: clamp(52px, 13.7vw, 82px);
+    }
+
+    .landing-hero-lead .landing-subtitle {
+        margin-top: 12px;
+        font-size: clamp(16px, 4.35vw, 19px);
+    }
+
+    .landing-hero-lead p {
+        max-width: 26em;
+        margin-block: 12px 20px;
+    }
+
+    .landing-hero-lead br {
+        display: none;
+    }
+
+    .landing-hero .landing-join-link {
+        margin-top: auto;
     }
 
     .landing-jobs {
