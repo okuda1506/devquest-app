@@ -172,7 +172,7 @@ function ClosingCall({ started }: { started: boolean }) {
 
     return (
         <section
-            className="landing-closing landing-frame"
+            className="landing-closing"
             aria-labelledby="landing-closing-title"
             data-reveal="closing"
         >
