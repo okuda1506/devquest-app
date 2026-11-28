@@ -100,6 +100,9 @@ export function Welcome({
             {!page && (
                 <footer className="landing-footer">
                     <div className="landing-footer-content">
+                        <Link className="landing-footer-privacy" to="/privacy">
+                            プライバシーポリシー
+                        </Link>
                         <span className="landing-footer-credit">
                             <small>© takuyaokuda</small>
                             <a
@@ -110,9 +113,6 @@ export function Welcome({
                                 <Github size={18} aria-hidden="true" />
                             </a>
                         </span>
-                        <Link className="landing-footer-privacy" to="/privacy">
-                            プライバシーポリシー
-                        </Link>
                     </div>
                 </footer>
             )}
