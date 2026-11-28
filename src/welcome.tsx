@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { privacyPolicyVersion } from '../supabase/functions/quest/privacy';
-import { ArrowRight, Code2 } from 'lucide-react';
+import { ArrowRight, Code2, Github } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { WelcomeLanding } from './welcome-landing';
 import './welcome.css';
@@ -95,6 +95,16 @@ export function Welcome({
                     </>
                 )}
             </main>
+            {!page && (
+                <footer className="landing-footer">
+                    <div className="landing-footer-content">
+                        <small>© takuyaokuda</small>
+                        <a href="https://github.com/okuda1506" aria-label="takuyaokudaのGitHubプロフィール">
+                            <Github size={20} aria-hidden="true" />
+                        </a>
+                    </div>
+                </footer>
+            )}
         </div>
     );
 }

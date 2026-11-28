@@ -82,6 +82,39 @@
     padding-bottom: var(--landing-gutter);
 }
 
+.landing-footer {
+    background: #f2f6f8;
+    color: var(--landing-muted);
+    border-top: 1px solid #dce6ec;
+}
+
+.landing-footer-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: min(1480px, calc(100% - 2 * clamp(20px, 3.82vw, 66px)));
+    margin-inline: auto;
+    padding-block: 12px;
+}
+
+.landing-footer-content small {
+    font-size: 13px;
+}
+
+.landing-footer a {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: var(--landing-ink);
+}
+
+.landing-footer a:hover {
+    background: var(--landing-surface);
+}
+
 .landing-frame,
 .landing-section {
     margin-inline: auto;
