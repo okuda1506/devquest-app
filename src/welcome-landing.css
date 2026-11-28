@@ -525,22 +525,27 @@
     }
 
     [data-reveal='screen'][data-motion='entered'] {
-        animation: landing-unmask 1100ms var(--landing-ease) calc(var(--order) * 175ms) backwards;
+        animation: landing-unmask 1100ms var(--landing-ease)
+            calc(var(--landing-reveal-delay, 0ms) + var(--order) * 175ms) backwards;
     }
 
-    [data-reveal='device'][data-motion='waiting'] {
-        opacity: var(--device-progress, 0);
-        transform: scale(calc(0.85 + 0.15 * var(--device-progress, 0)));
+    [data-reveal='device'][data-motion='entered'] {
+        animation: landing-scale-in 950ms var(--landing-ease) var(--landing-reveal-delay, 0ms) backwards;
     }
 
-    [data-reveal='copy'][data-motion='waiting'],
-    [data-reveal='logo'][data-motion='waiting'],
+    :is(
+        [data-reveal='intro'],
+        [data-reveal='copy'],
+        [data-reveal='device'],
+        [data-reveal='logo']
+    )[data-motion='waiting'],
     .landing-jobs [data-motion='waiting'] > div {
         opacity: 0;
     }
 
-    [data-reveal='copy'][data-motion='entered'] {
-        animation: landing-fade 700ms var(--landing-ease) backwards;
+    :is([data-reveal='intro'], [data-reveal='copy'])[data-motion='entered'] {
+        animation: landing-fade var(--landing-copy-duration) var(--landing-ease) var(--landing-reveal-delay, 0ms)
+            backwards;
     }
 
     .landing-jobs [data-motion='waiting']::before {
@@ -548,15 +553,18 @@
     }
 
     .landing-jobs [data-motion='entered']::before {
-        animation: landing-rule 900ms var(--landing-ease) calc(var(--order) * 145ms) backwards;
+        animation: landing-rule 900ms var(--landing-ease)
+            calc(var(--landing-reveal-delay, 0ms) + var(--order) * 145ms) backwards;
     }
 
     .landing-jobs [data-motion='entered'] > div {
-        animation: landing-fade 750ms var(--landing-ease) calc(170ms + var(--order) * 145ms) backwards;
+        animation: landing-fade 750ms var(--landing-ease)
+            calc(var(--landing-reveal-delay, 0ms) + 170ms + var(--order) * 145ms) backwards;
     }
 
     [data-reveal='logo'][data-motion='entered'] {
-        animation: landing-logo 700ms var(--landing-ease) calc(var(--order) * 70ms) backwards;
+        animation: landing-scale-in 700ms var(--landing-ease)
+            calc(var(--landing-reveal-delay, 0ms) + var(--order) * 70ms) backwards;
     }
 
     .landing-closing[data-motion='waiting']:not(:focus-within) > *,
@@ -604,7 +612,7 @@
     }
 }
 
-@keyframes landing-logo {
+@keyframes landing-scale-in {
     from {
         opacity: 0;
         transform: scale(0.85);
