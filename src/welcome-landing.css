@@ -43,12 +43,6 @@
     font-weight: 700;
 }
 
-.welcome-public .brand-icon {
-    background: #8195fc;
-    color: #171b33;
-    border: 0;
-}
-
 .welcome-public .welcome-header nav .button,
 .landing-join-link {
     border: 0;
@@ -89,17 +83,25 @@
 .landing-footer-content {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0 clamp(12px, 2.4vw, 32px);
     padding-block: 12px;
     border-top: 1px solid #dce6ec;
-}
-
-.landing-footer-content small {
     font-size: 13px;
 }
 
-.landing-footer a {
+.landing-footer-credit {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+}
+
+.landing-footer-credit small {
+    font-size: inherit;
+}
+
+.landing-footer-github {
     display: grid;
     place-items: center;
     width: 44px;
@@ -108,8 +110,19 @@
     color: var(--landing-ink);
 }
 
-.landing-footer a:hover {
+.landing-footer-github:hover {
     background: var(--landing-surface);
+}
+
+.landing-footer-privacy {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    text-decoration: none;
+}
+
+.landing-footer-privacy:hover {
+    color: var(--landing-blue);
 }
 
 .landing-frame,
@@ -518,10 +531,6 @@
 @media (max-width: 600px) {
     .welcome-public .welcome-header nav .button {
         padding-inline: 9px;
-    }
-
-    .welcome-public .welcome-brand {
-        gap: 7px;
     }
 
     .landing-hero h1 {

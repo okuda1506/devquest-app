@@ -25,9 +25,11 @@ export function Welcome({
             <header className="welcome-header">
                 <div className="welcome-container welcome-header-content">
                     <Link to="/" className="welcome-brand">
-                        <span className="brand-icon">
-                            <Code2 size={20} />
-                        </span>{' '}
+                        {page && (
+                            <span className="brand-icon">
+                                <Code2 size={20} />
+                            </span>
+                        )}
                         DevQuest
                     </Link>
                     <nav aria-label="アカウント">
@@ -98,10 +100,19 @@ export function Welcome({
             {!page && (
                 <footer className="landing-footer">
                     <div className="landing-footer-content">
-                        <small>© takuyaokuda</small>
-                        <a href="https://github.com/okuda1506" aria-label="takuyaokudaのGitHubプロフィール">
-                            <Github size={20} aria-hidden="true" />
-                        </a>
+                        <span className="landing-footer-credit">
+                            <small>© takuyaokuda</small>
+                            <a
+                                className="landing-footer-github"
+                                href="https://github.com/okuda1506"
+                                aria-label="takuyaokudaのGitHubプロフィール"
+                            >
+                                <Github size={18} aria-hidden="true" />
+                            </a>
+                        </span>
+                        <Link className="landing-footer-privacy" to="/privacy">
+                            プライバシーポリシー
+                        </Link>
                     </div>
                 </footer>
             )}
