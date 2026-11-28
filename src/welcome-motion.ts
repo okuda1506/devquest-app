@@ -1,7 +1,7 @@
 import { useLayoutEffect, type RefObject } from 'react';
 import { useReducedMotion } from './dialogue-line';
 
-const startLine = 0.6;
+const startLine = 2 / 3;
 const copyDuration = 650;
 
 export function useLandingMotion(
@@ -37,6 +37,7 @@ export function useLandingMotion(
                 ] as const;
             })
         );
+        const [, secondScreen, questScreen] = root.querySelectorAll<HTMLElement>('[data-reveal="screen"]');
         const device = root.querySelector<HTMLElement>('[data-reveal="device"]');
         root.style.setProperty('--landing-copy-duration', copyDuration + 'ms');
 
@@ -67,6 +68,7 @@ export function useLandingMotion(
                 const ready =
                     rect.top <= threshold ||
                     atEndAndVisible ||
+                    (!initial && item === questScreen && !pending.has(secondScreen)) ||
                     (section === 'copy' && deviceTop <= threshold && rect.top < height);
                 const before = prerequisites.get(item) ?? [];
 

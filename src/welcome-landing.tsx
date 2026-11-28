@@ -232,7 +232,7 @@ export function WelcomeLanding() {
                 </div>
                 <div className="landing-gallery">
                     {screens.map(({ src, label, height }, index) => (
-                        <figure key={label} style={{ '--order': index } as CSSProperties}>
+                        <figure key={label} data-reveal="screen" style={{ '--order': index } as CSSProperties}>
                             <figcaption>{label}</figcaption>
                             <img
                                 src={src}
@@ -241,7 +241,6 @@ export function WelcomeLanding() {
                                 loading="lazy"
                                 decoding="async"
                                 alt={label + 'のスクリーンショット'}
-                                data-reveal="screen"
                             />
                         </figure>
                     ))}

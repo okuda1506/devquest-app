@@ -507,7 +507,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
     .landing-hero-lead > * {
-        animation: landing-fade 900ms var(--landing-ease) backwards;
+        animation: landing-rise 900ms var(--landing-ease) backwards;
     }
 
     .landing-hero-lead > :nth-child(2) {
@@ -520,13 +520,24 @@
         animation-delay: 165ms;
     }
 
-    [data-reveal='screen'][data-motion='waiting'] {
+    [data-reveal='screen'][data-motion='waiting'] img {
         clip-path: inset(0 100% 0 0 round 8px);
     }
 
+    [data-reveal='screen'][data-motion='waiting'] figcaption {
+        opacity: 0;
+    }
+
     [data-reveal='screen'][data-motion='entered'] {
-        animation: landing-unmask 1100ms var(--landing-ease)
-            calc(var(--landing-reveal-delay, 0ms) + var(--order) * 175ms) backwards;
+        --screen-delay: calc(var(--landing-reveal-delay, 0ms) + var(--order) * 260ms);
+    }
+
+    [data-reveal='screen'][data-motion='entered'] figcaption {
+        animation: landing-rise 500ms var(--landing-ease) var(--screen-delay) backwards;
+    }
+
+    [data-reveal='screen'][data-motion='entered'] img {
+        animation: landing-unmask 1100ms var(--landing-ease) calc(var(--screen-delay) + 230ms) backwards;
     }
 
     [data-reveal='device'][data-motion='entered'] {
@@ -544,7 +555,7 @@
     }
 
     :is([data-reveal='intro'], [data-reveal='copy'])[data-motion='entered'] {
-        animation: landing-fade var(--landing-copy-duration) var(--landing-ease) var(--landing-reveal-delay, 0ms)
+        animation: landing-rise var(--landing-copy-duration) var(--landing-ease) var(--landing-reveal-delay, 0ms)
             backwards;
     }
 
@@ -558,7 +569,7 @@
     }
 
     .landing-jobs [data-motion='entered'] > div {
-        animation: landing-fade 750ms var(--landing-ease)
+        animation: landing-rise 750ms var(--landing-ease)
             calc(var(--landing-reveal-delay, 0ms) + 170ms + var(--order) * 145ms) backwards;
     }
 
@@ -591,6 +602,17 @@
     }
     to {
         opacity: 1;
+    }
+}
+
+@keyframes landing-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 
