@@ -57,7 +57,7 @@ const work = [
     {
         title: '新機能開発・障害対応',
         description: '新機能の開発に加え、運用中に発生する障害の調査やパフォーマンス改善にも取り組みます。',
-        examples: '外部APIを用いた新機能開発（追加予定）・ログ調査・SQL最適化・パフォーマンス改善など。'
+        examples: '外部APIを用いた新機能開発・ログ調査・SQL最適化・パフォーマンス改善など。'
     }
 ];
 
@@ -80,7 +80,7 @@ const readingPause = { baseMs: 1050, perCharacterMs: 42 };
 function JoinLink() {
     return (
         <Link className="landing-join-link" to="/signup">
-            プロジェクトにジョイン
+            ジョインする
         </Link>
     );
 }
@@ -99,9 +99,9 @@ function TeamBriefing() {
         const observer =
             typeof IntersectionObserver === 'function'
                 ? new IntersectionObserver(([entry]) => {
-                      inView = entry.isIntersecting;
-                      update();
-                  })
+                    inView = entry.isIntersecting;
+                    update();
+                })
                 : undefined;
         if (dialogue.current) observer?.observe(dialogue.current);
         document.addEventListener('visibilitychange', update);
@@ -217,12 +217,13 @@ export function WelcomeLanding() {
                         Experience Real Development.
                     </p>
                     <p>
-                        クエスト形式で実際の開発業務を疑似体験できる、全く新しいエンジニアリング学習プラットフォーム。
+                        クエスト形式で実際の開発業務を疑似体験できる、<br />
+                        全く新しいエンジニアリング学習プラットフォーム。
                     </p>
                     <JoinLink />
                 </div>
                 <TeamBriefing />
-            </section>
+            </section >
             <section className="landing-section" aria-labelledby="landing-project">
                 <div className="landing-intro" data-reveal="intro">
                     <h2 id="landing-project">THREAD. にジョインする</h2>
@@ -254,7 +255,7 @@ export function WelcomeLanding() {
                 <div className="landing-bench">
                     <div className="landing-bench-copy" data-reveal="copy">
                         <h3>
-                            自分の環境で、
+                            自分の環境で
                             <br />
                             実務さながらの開発を。
                         </h3>
@@ -309,6 +310,6 @@ export function WelcomeLanding() {
                 </ul>
             </section>
             <ClosingCall started={closingStarted} />
-        </div>
+        </div >
     );
 }
