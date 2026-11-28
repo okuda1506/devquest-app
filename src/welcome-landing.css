@@ -83,9 +83,7 @@
 }
 
 .landing-footer {
-    background: #f2f6f8;
     color: var(--landing-muted);
-    border-top: 1px solid #dce6ec;
 }
 
 .landing-footer-content {
@@ -93,9 +91,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    width: min(1480px, calc(100% - 2 * clamp(20px, 3.82vw, 66px)));
-    margin-inline: auto;
     padding-block: 12px;
+    border-top: 1px solid #dce6ec;
 }
 
 .landing-footer-content small {
@@ -116,7 +113,8 @@
 }
 
 .landing-frame,
-.landing-section {
+.landing-section,
+.landing-footer-content {
     margin-inline: auto;
 }
 
@@ -125,7 +123,8 @@
     border-radius: clamp(20px, 2.2vw, 32px);
 }
 
-.landing-section {
+.landing-section,
+.landing-footer-content {
     width: min(1480px, calc(100% - 2 * clamp(20px, 3.82vw, 66px)));
 }
 
