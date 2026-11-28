@@ -59,6 +59,7 @@
 
 .welcome-public .welcome-header nav .primary,
 .landing-join-link {
+    border-radius: 10px;
     background: var(--landing-blue);
     color: #fff;
 }
