@@ -10,8 +10,12 @@ function subscribeMotion(update: () => void) {
     return () => media.removeEventListener('change', update);
 }
 
+export function useReducedMotion() {
+    return useSyncExternalStore(subscribeMotion, () => window.matchMedia(motionPreference).matches);
+}
+
 export function useDialoguePlayback(line: string, instant: boolean) {
-    const reduced = useSyncExternalStore(subscribeMotion, () => window.matchMedia(motionPreference).matches);
+    const reduced = useReducedMotion();
     const [finished, setFinished] = useState(false);
     useLayoutEffect(() => setFinished(false), [line, instant, reduced]);
     return { typing: !instant && !reduced && !finished, finish: () => setFinished(true) };

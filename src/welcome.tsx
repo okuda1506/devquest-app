@@ -21,7 +21,7 @@ export function Welcome({
     const signup = page === 'signup';
     const [accepted, setAccepted] = useState(false);
     return (
-        <div className={page || error ? 'welcome' : 'welcome welcome-cover'}>
+        <div className={page ? 'welcome' : 'welcome welcome-public'}>
             <header className="welcome-header">
                 <div className="welcome-container welcome-header-content">
                     <Link to="/" className="welcome-brand">
